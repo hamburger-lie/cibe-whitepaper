@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIBE 美业数据白皮书生成系统</title>
+
+<!-- CDN 依赖 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1/dist/html2canvas.min.js"></script>
+
+<style>
+/* ============================================= */
+/* CSS 变量 & 全局                                */
+/* ============================================= */
+:root {
+  --cibe-pink: #E3004F;
+  --cibe-pink-light: #FF6B9D;
+  --cibe-pink-bg: #FFF0F5;
+  --cibe-dark: #1A1A2E;
+  --cibe-gray: #2D3748;
+  --bg: #F8F9FA;
+  --white: #FFFFFF;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --a4-width: 794px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--cibe-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ============================================= */
+/* 顶部导航                                       */
+/* ============================================= */
+.navbar {
+  background: var(--white);
+  border-bottom: 3px solid var(--cibe-pink);
+  padding: 0 40px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-box {
+  width: 40px;
+  height: 40px;
+  background: var(--cibe-pink);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.navbar h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cibe-dark);
+}
+
+.navbar h1 span {
+  color: var(--cibe-pink);
+}
+
+.navbar-status {
+  font-size: 13px;
+  color: #999;
+}
+
+/* ============================================= */
+/* 主内容区                                       */
+/* ============================================= */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ============================================= */
+/* 上传区                                         */
+/* ============================================= */
+.upload-section {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.upload-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.upload-tab {
+  flex: 1;
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.upload-tab.active {
+  color: var(--cibe-pink);
+  border-bottom-color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+
+.upload-tab:hover:not(.active) {
+  background: #f9f9f9;
+}
+
+.upload-panel {
+  padding: 32px;
+  display: none;
+}
+
+.upload-panel.active {
+  display: block;
+}
+
+/* 文件上传拖拽区 */
+.dropzone {
+  border: 2px dashed #ddd;
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+
+.dropzone-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.dropzone-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.dropzone-hint {
+  font-size: 13px;
+  color: #999;
+}
+
+.file-info {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.file-info.show {
+  display: flex;
+}
+
+.file-info-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.file-info-remove {
+  cursor: pointer;
+  color: #999;
+  font-size: 18px;
+}
+
+.file-info-remove:hover {
+  color: var(--cibe-pink);
+}
+
+/* 文字粘贴区 */
+.text-input {
+  width: 100%;
+  min-height: 200px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+}
+
+/* ============================================= */
+/* 生成按钮 & 进度                                 */
+/* ============================================= */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.btn {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--cibe-pink);
+  color: white;
+  flex: 1;
+  justify-content: center;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #c70045;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(227,0,79,0.3);
+}
+
+.btn-secondary {
+  background: var(--cibe-gray);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #1a202c;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--cibe-pink);
+  border: 2px solid var(--cibe-pink);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--cibe-pink-bg);
+}
+
+/* 进度条 */
+.progress-section {
+  display: none;
+  margin-bottom: 24px;
+}
+
+.progress-section.show {
+  display: block;
+}
+
+.progress-bar-wrapper {
+  background: #e9ecef;
+  border-radius: 20px;
+  overflow: hidden;
+  height: 8px;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cibe-pink), var(--cibe-pink-light));
+  border-radius: 20px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+}
+
+/* ============================================= */
+/* 操作栏                                         */
+/* ============================================= */
+.toolbar {
+  display: none;
+  gap: 12px;
+  margin-bottom: 24px;
+  justify-content: flex-end;
+}
+
+.toolbar.show {
+  display: flex;
+}
+
+/* ============================================= */
+/* 白皮书预览区                                    */
+/* ============================================= */
+.preview-section {
+  display: none;
+}
+
+.preview-section.show {
+  display: block;
+}
+
+/* 缩放容器 */
+.preview-scaler {
+  max-width: var(--a4-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.preview-card {
+  background: var(--white);
+  width: 100%;
+  max-width: var(--a4-width);
+  margin: 0 auto;
+  box-shadow: var(--shadow-lg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* 封面页 */
+.cover-page {
+  padding: 80px 60px;
+  min-height: 500px;
+  background: linear-gradient(135deg, var(--cibe-pink) 0%, #a0003a 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cover-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  margin-bottom: 32px;
+  backdrop-filter: blur(4px);
+  width: fit-content;
+}
+
+.cover-title {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-bottom: 24px;
+}
+
+.cover-subtitle {
+  font-size: 16px;
+  opacity: 0.85;
+  line-height: 1.8;
+}
+
+.cover-footer {
+  margin-top: 60px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* 正文区 */
+.content-body {
+  padding: 60px;
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--cibe-dark);
+}
+
+.content-body h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cibe-pink);
+  margin: 40px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--cibe-pink-bg);
+}
+
+.content-body h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 28px 0 12px;
+  color: var(--cibe-gray);
+}
+
+.content-body p {
+  margin: 12px 0;
+  text-align: justify;
+}
+
+.content-body ul, .content-body ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.content-body li {
+  margin: 6px 0;
+}
+
+.content-body strong {
+  color: var(--cibe-pink);
+}
+
+.content-body blockquote {
+  border-left: 4px solid var(--cibe-pink);
+  padding: 12px 20px;
+  margin: 16px 0;
+  background: var(--cibe-pink-bg);
+  border-radius: 0 8px 8px 0;
+}
+
+.content-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+.content-body th {
+  background: var(--cibe-pink);
+  color: white;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.content-body td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.content-body tr:hover td {
+  background: #fafafa;
+}
+
+/* 图表容器 */
+.chart-container {
+  width: 100%;
+  height: 380px;
+  margin: 24px 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 配图容器 */
+.image-container {
+  width: 100%;
+  margin: 24px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  text-align: center;
+  background: #fafafa;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-container img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.image-placeholder {
+  padding: 40px;
+  color: #999;
+  font-size: 13px;
+  text-align: center;
+}
+
+.image-loading {
+  padding: 40px;
+  color: var(--cibe-pink);
+  font-size: 13px;
+}
+
+/* ============================================= */
+/* 响应式                                         */
+/* ============================================= */
+@media (max-width: 860px) {
+  .container { padding: 20px 12px 60px; }
+  .cover-page { padding: 40px 30px; }
+  .content-body { padding: 30px; }
+  .cover-title { font-size: 26px; }
+}
+
+/* ============================================= */
+/* 打印样式                                       */
+/* ============================================= */
+@media print {
+  .navbar, .upload-section, .action-bar, .progress-section, .toolbar { display: none !important; }
+  .preview-card { box-shadow: none; }
+}
+
+/* ============================================= */
+/* 动画                                           */
+/* ============================================= */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ============================================= */
+/* Toast 通知                                     */
+/* ============================================= */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 14px 24px;
+  background: var(--cibe-dark);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.error {
+  background: #dc3545;
+}
+
+.toast.success {
+  background: #28a745;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ========== 顶部导航 ========== -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="logo-box">C</div>
+    <h1>CIBE <span>美业数据白皮书</span>生成系统</h1>
+  </div>
+  <div class="navbar-status" id="navStatus">AI 就绪</div>
+</nav>
+
+<!-- ========== 主内容 ========== -->
+<div class="container">
+
+  <!-- 上传区 -->
+  <div class="upload-section">
+    <div class="upload-tabs">
+      <div class="upload-tab active" data-tab="file" onclick="switchTab('file')">
+        📁 上传文件
+      </div>
+      <div class="upload-tab" data-tab="text" onclick="switchTab('text')">
+        📝 粘贴文字
+      </div>
+    </div>
+
+    <!-- 文件上传面板 -->
+    <div class="upload-panel active" id="panel-file">
+      <div class="dropzone" id="dropzone"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event)"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('fileInput').click()">
+        <div class="dropzone-icon">📊</div>
+        <div class="dropzone-title">拖拽文件到此处，或点击选择文件</div>
+        <div class="dropzone-hint">支持 CSV / Excel / Word (.docx) / PDF 格式</div>
+      </div>
+      <input type="file" id="fileInput" hidden
+             accept=".csv,.xlsx,.xls,.docx,.pdf"
+             onchange="handleFileSelect(event)">
+      <div class="file-info" id="fileInfo">
+        <span>📎</span>
+        <span class="file-info-name" id="fileName"></span>
+        <span class="file-info-remove" onclick="removeFile()">✕</span>
+      </div>
+    </div>
+
+    <!-- 文字粘贴面板 -->
+    <div class="upload-panel" id="panel-text">
+      <textarea class="text-input" id="textInput"
+                placeholder="在此粘贴品牌数据或文字信息...&#10;&#10;例如：&#10;品牌名称：花西子&#10;2024年Q1-Q4营收分别为：3.2亿、4.1亿、5.8亿、7.2亿&#10;主力产品：散粉、眉笔、口红&#10;线上渠道占比：78%"></textarea>
+    </div>
+  </div>
+
+  <!-- 生成按钮 -->
+  <div class="action-bar">
+    <button class="btn btn-primary" id="btnGenerate" onclick="generateWhitepaper()">
+      ✨ 生成白皮书
+    </button>
+  </div>
+
+  <!-- 进度条 -->
+  <div class="progress-section" id="progressSection">
+    <div class="progress-bar-wrapper">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">准备中...</div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar" id="toolbar">
+    <button class="btn btn-outline" onclick="window.print()">🖨️ 打印预览</button>
+    <button class="btn btn-secondary" id="btnExport" onclick="exportPDF()">📄 导出 PDF</button>
+  </div>
+
+  <!-- 白皮书预览 -->
+  <div class="preview-section" id="previewSection">
+    <div class="preview-scaler" id="previewScaler">
+    <div class="preview-card" id="previewCard">
+      <!-- 封面页 -->
+      <div class="cover-page" id="coverPage">
+        <div class="cover-badge">CIBE 广州国际美博会</div>
+        <div class="cover-title" id="coverTitle">美业数据洞察白皮书</div>
+        <div class="cover-subtitle" id="coverSubtitle">
+          基于品牌核心数据的深度分析报告<br>
+          洞悉行业趋势，赋能品牌增长
+        </div>
+        <div class="cover-footer" id="coverFooter"></div>
+      </div>
+      <!-- 正文 -->
+      <div class="content-body" id="contentBody"></div>
+    </div>
+    </div><!-- /preview-scaler -->
+  </div>
+
+</div>
+
+<!-- Toast 通知 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================================
+// 全局状态
+// =============================================================
+let selectedFile = null;
+let chartInstances = [];
+let isExporting = false;
+const API_BASE = window.location.origin;
+
+// =============================================================
+// Tab 切换
+// =============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.upload-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.upload-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`panel-${tab}`).classList.add('active');
+}
+
+// =============================================================
+// 文件处理
+// =============================================================
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('dragover');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) setFile(files[0]);
+}
+
+function handleFileSelect(e) {
+  if (e.target.files.length > 0) setFile(e.target.files[0]);
+}
+
+function setFile(file) {
+  const validExts = ['csv', 'xlsx', 'xls', 'docx', 'pdf'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!validExts.includes(ext)) {
+    showToast('不支持的文件格式，请上传 CSV/Excel/Word/PDF', 'error');
+    return;
+  }
+  selectedFile = file;
+  document.getElementById('fileName').textContent = `${file.name} (${formatSize(file.size)})`;
+  document.getElementById('fileInfo').classList.add('show');
+}
+
+function removeFile() {
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileInfo').classList.remove('show');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// =============================================================
+// 生成白皮书
+// =============================================================
+async function generateWhitepaper() {
+  const textInput = document.getElementById('textInput').value.trim();
+  const activeTab = document.querySelector('.upload-tab.active').dataset.tab;
+
+  if (activeTab === 'file' && !selectedFile) {
+    showToast('请先上传一个数据文件', 'error');
+    return;
+  }
+  if (activeTab === 'text' && !textInput) {
+    showToast('请输入文字内容', 'error');
+    return;
+  }
+
+  // 准备表单数据
+  const formData = new FormData();
+  if (activeTab === 'file' && selectedFile) {
+    formData.append('file', selectedFile);
+  } else {
+    formData.append('text', textInput);
+  }
+
+  // UI 状态
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 生成中...';
+  showProgress(true);
+  updateProgress(10, '正在解析数据...');
+  document.getElementById('navStatus').textContent = '生成中...';
+
+  try {
+    updateProgress(25, '正在调用 AI 分析数据...');
+
+    const resp = await fetch(`${API_BASE}/api/generate`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    updateProgress(60, '正在生成白皮书内容...');
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: '服务器错误' }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (data.status !== 'success' || !data.markdown) {
+      throw new Error('返回数据异常');
+    }
+
+    updateProgress(80, '正在渲染图表与配图...');
+
+    // 渲染白皮书
+    await renderWhitepaper(data.markdown);
+
+    updateProgress(100, '生成完成！');
+
+    // 显示工具栏和预览
+    document.getElementById('toolbar').classList.add('show');
+    document.getElementById('previewSection').classList.add('show');
+    document.getElementById('navStatus').textContent = '生成完成';
+    showToast('白皮书生成成功！', 'success');
+
+    // 滚动到预览区
+    setTimeout(() => {
+      resizeAllCharts();
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+
+  } catch (err) {
+    showToast(err.message, 'error');
+    document.getElementById('navStatus').textContent = '生成失败';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ 生成白皮书';
+    setTimeout(() => showProgress(false), 1500);
+  }
+}
+
+// =============================================================
+// 白皮书渲染
+// =============================================================
+async function renderWhitepaper(markdown) {
+  // 销毁旧图表
+  chartInstances.forEach(c => c.dispose());
+  chartInstances = [];
+
+  // 设置封面日期
+  const now = new Date();
+  document.getElementById('coverFooter').textContent =
+    `${now.getFullYear()} 年 ${now.getMonth() + 1} 月  |  CIBE 美博会 · AI 智能分析`;
+
+  // 从 markdown 提取标题作为封面标题
+  const titleMatch = markdown.match(/^#\s+(.+)/m);
+  if (titleMatch) {
+    document.getElementById('coverTitle').textContent = titleMatch[1];
+  }
+
+  // 1. 提取 <chart> 和 <image> 标签，替换为占位符
+  let chartIdx = 0;
+  let imageIdx = 0;
+  const chartDataMap = {};
+  const imagePromptMap = {};
+
+  // 处理 chart 标签
+  markdown = markdown.replace(
+    /<chart\s+type=["']([^"']+)["']\s+title=["']([^"']+)["']\s+data='([^']+)'><\/chart>/g,
+    (match, type, title, dataStr) => {
+      const id = `chart-${chartIdx++}`;
+      try {
+        chartDataMap[id] = { type, title, data: JSON.parse(dataStr) };
+      } catch (e) {
+        chartDataMap[id] = { type, title, data: null };
+      }
+      return `<div class="chart-container" id="${id}"></div>`;
+    }
+  );
+
+  // 处理 image 标签
+  markdown = markdown.replace(
+    /<image\s+prompt=["']([^"']+)["']><\/image>/g,
+    (match, prompt) => {
+      const id = `genimg-${imageIdx++}`;
+      imagePromptMap[id] = prompt;
+      return `<div class="image-container" id="${id}"><div class="image-loading loading-pulse">🎨 正在生成配图...</div></div>`;
+    }
+  );
+
+  // 2. 渲染 Markdown
+  const contentBody = document.getElementById('contentBody');
+  contentBody.innerHTML = marked.parse(markdown);
+
+  // 3. 初始化 ECharts
+  await new Promise(r => setTimeout(r, 200));  // 等待 DOM 布局
+  for (const [id, cfg] of Object.entries(chartDataMap)) {
+    const el = document.getElementById(id);
+    if (el && cfg.data) {
+      const chart = echarts.init(el);
+      chart.setOption(buildChartOption(cfg.type, cfg.title, cfg.data));
+      chartInstances.push(chart);
+    }
+  }
+  // 延迟 resize 确保尺寸正确
+  await new Promise(r => setTimeout(r, 100));
+  chartInstances.forEach(c => c.resize());
+
+  // 4. 异步生成配图（不阻塞主流程）
+  for (const [id, prompt] of Object.entries(imagePromptMap)) {
+    generateAndFillImage(id, prompt);
+  }
+}
+
+// =============================================================
+// ECharts 配置构建 — CIBE 玫红主题
+// =============================================================
+const CIBE_COLORS = ['#E3004F', '#FF6B9D', '#2D3748', '#E9967A', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+
+function buildChartOption(type, title, data) {
+  const base = {
+    title: {
+      text: title,
+      left: 'center',
+      top: 12,
+      textStyle: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: '#1A1A2E',
+        width: 600,
+        overflow: 'break',
+      },
+    },
+    tooltip: {
+      trigger: type === 'pie' ? 'item' : 'axis',
+      confine: true,
+    },
+    color: CIBE_COLORS,
+    animation: true,
+  };
+
+  if (type === 'pie') {
+    return {
+      ...base,
+      legend: {
+        bottom: 10,
+        left: 'center',
+        textStyle: { fontSize: 11 },
+        type: 'scroll',
+      },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '58%'],
+        center: ['50%', '48%'],
+        data: data.labels.map((label, i) => ({
+          name: label,
+          value: data.datasets[0].values[i],
+        })),
+        label: {
+          formatter: '{b}\n{d}%',
+          fontSize: 11,
+          lineHeight: 16,
+          position: 'outside',
+        },
+        labelLine: { length: 12, length2: 8 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
+      }],
+    };
+  }
+
+  if (type === 'scatter') {
+    return {
+      ...base,
+      grid: { left: 50, right: 30, top: 50, bottom: 40, containLabel: true },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'value' },
+      series: data.datasets.map((ds, i) => ({
+        name: ds.name,
+        type: 'scatter',
+        data: ds.values.map((v, j) => [data.labels[j] || j, v]),
+        symbolSize: 14,
+      })),
+    };
+  }
+
+  // bar / line / area
+  const chartType = type === 'area' ? 'line' : type;
+  return {
+    ...base,
+    grid: { left: 20, right: 30, top: 55, bottom: 45, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: data.labels,
+      axisLabel: { fontSize: 11, interval: 0, rotate: data.labels.length > 6 ? 30 : 0 },
+      axisTick: { alignWithLabel: true },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } },
+    },
+    legend: {
+      bottom: 5,
+      textStyle: { fontSize: 11 },
+      type: 'scroll',
+    },
+    series: data.datasets.map((ds, i) => ({
+      name: ds.name,
+      type: chartType,
+      data: ds.values,
+      smooth: true,
+      areaStyle: type === 'area' ? { opacity: 0.15 } : undefined,
+      barMaxWidth: 50,
+      barMinWidth: 15,
+      label: {
+        show: data.datasets.length === 1 && data.labels.length <= 8,
+        position: 'top',
+        fontSize: 11,
+        color: '#666',
+      },
+    })),
+  };
+}
+
+// =============================================================
+// 豆包星绘配图
+// =============================================================
+async function generateAndFillImage(containerId, prompt) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  try {
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('width', '768');
+    formData.append('height', '512');
+
+    const resp = await fetch(`${API_BASE}/api/generate-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const result = await resp.json();
+
+    if (result.status === 'success' && result.image_base64) {
+      container.innerHTML = `<img src="data:image/png;base64,${result.image_base64}" alt="${prompt}">`;
+    } else if (result.status === 'unavailable') {
+      // 星绘未配置 → 显示优雅的占位图
+      container.innerHTML = `
+        <div class="image-placeholder">
+          <div style="font-size:36px;margin-bottom:8px">🖼️</div>
+          <div>配图位置（豆包星绘未配置）</div>
+          <div style="font-size:12px;margin-top:4px;color:#bbb">${escapeHtml(prompt)}</div>
+        </div>`;
+    } else {
+      container.innerHTML = `
+        <div class="image-placeholder">
+          <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+          <div>配图生成失败</div>
+          <div style="font-size:12px;margin-top:4px;color:#bbb">${escapeHtml(result.message || '')}</div>
+        </div>`;
+    }
+  } catch (e) {
+    container.innerHTML = `
+      <div class="image-placeholder">
+        <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+        <div>配图请求失败</div>
+      </div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// =============================================================
+// PDF 导出 — 智能分页，避免内容截断
+// =============================================================
+async function exportPDF() {
+  if (isExporting) return;
+  isExporting = true;
+
+  const btn = document.getElementById('btnExport');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 导出中...';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const PAGE_W = 210;   // mm
+    const PAGE_H = 297;   // mm
+    const MARGIN = 10;    // mm 上下页边距
+    const USABLE_H = PAGE_H - MARGIN * 2;
+
+    // ---- 1. ECharts → 静态图片 ----
+    const chartSnapshots = [];
+    chartInstances.forEach(chart => {
+      const el = chart.getDom();
+      const dataUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      chartSnapshots.push({ el, originalHTML: el.innerHTML, img });
+      el.innerHTML = '';
+      el.appendChild(img);
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // ---- 2. 截图封面页（独占一页）----
+    const coverEl = document.getElementById('coverPage');
+    const coverCanvas = await html2canvas(coverEl, {
+      scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#E3004F', logging: false,
+    });
+    const coverImg = coverCanvas.toDataURL('image/jpeg', 0.95);
+    const coverRatio = coverCanvas.height / coverCanvas.width;
+    const coverH = PAGE_W * coverRatio;
+    // 封面居中
+    const coverY = Math.max(0, (PAGE_H - coverH) / 2);
+    pdf.addImage(coverImg, 'JPEG', 0, coverY, PAGE_W, coverH);
+
+    // ---- 3. 正文逐块截图 + 智能分页 ----
+    const contentBody = document.getElementById('contentBody');
+    // 收集所有直接子块元素
+    const blocks = Array.from(contentBody.children);
+
+    let cursorY = MARGIN; // 当前页面光标位置 (mm)
+    let needNewPage = true; // 封面后需要新页
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      if (!block.offsetHeight || block.offsetHeight < 2) continue;
+
+      const blockCanvas = await html2canvas(block, {
+        scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false,
+      });
+
+      const blockImgData = blockCanvas.toDataURL('image/jpeg', 0.92);
+      const blockRatio = blockCanvas.height / blockCanvas.width;
+      const blockWmm = PAGE_W - MARGIN * 2;
+      const blockHmm = blockWmm * blockRatio;
+
+      // 如果这个块放不下当前页的剩余空间，换新页
+      if (needNewPage || (cursorY + blockHmm > PAGE_H - MARGIN)) {
+        pdf.addPage();
+        cursorY = MARGIN;
+        needNewPage = false;
+      }
+
+      // 超高块（比一整页还高）：缩放填满页面
+      if (blockHmm > USABLE_H) {
+        const fitScale = USABLE_H / blockHmm;
+        const fitW = blockWmm * fitScale;
+        const fitX = MARGIN + (blockWmm - fitW) / 2;
+        pdf.addImage(blockImgData, 'JPEG', fitX, cursorY, fitW, USABLE_H);
+        cursorY = PAGE_H; // 强制下一块换页
+      } else {
+        pdf.addImage(blockImgData, 'JPEG', MARGIN, cursorY, blockWmm, blockHmm);
+        cursorY += blockHmm + 2; // 2mm 间距
+      }
+    }
+
+    // ---- 4. 下载 ----
+    const fileName = `CIBE白皮书_${new Date().toISOString().slice(0, 10)}.pdf`;
+    pdf.save(fileName);
+    showToast('PDF 导出成功！', 'success');
+
+    // ---- 5. 恢复 ECharts ----
+    chartSnapshots.forEach(({ el, originalHTML }) => {
+      el.innerHTML = originalHTML;
+    });
+    chartInstances.forEach(chart => chart.resize());
+
+  } catch (err) {
+    console.error('PDF 导出失败:', err);
+    showToast('PDF 导出失败: ' + err.message, 'error');
+  } finally {
+    isExporting = false;
+    btn.disabled = false;
+    btn.innerHTML = '📄 导出 PDF';
+  }
+}
+
+// =============================================================
+// 进度条
+// =============================================================
+function showProgress(show) {
+  document.getElementById('progressSection').classList.toggle('show', show);
+  if (!show) {
+    document.getElementById('progressBar').style.width = '0%';
+  }
+}
+
+function updateProgress(pct, text) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+// =============================================================
+// Toast 通知
+// =============================================================
+function showToast(msg, type = '') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast show ' + type;
+  setTimeout(() => { toast.className = 'toast'; }, 3500);
+}
+
+// =============================================================
+// 自适应：图表跟随容器 resize
+// =============================================================
+function resizeAllCharts() {
+  chartInstances.forEach(c => c.resize());
+}
+
+// =============================================================
+// 初始化
+// =============================================================
+window.addEventListener('resize', resizeAllCharts);
+
+// 健康检查
+fetch(`${API_BASE}/api/health`)
+  .then(r => r.json())
+  .then(d => {
+    const parts = [];
+    parts.push(d.deepseek ? 'DeepSeek ✓' : 'DeepSeek ✗');
+    parts.push(d.image_gen ? '星绘 ✓' : '星绘 ✗');
+    document.getElementById('navStatus').textContent = parts.join(' | ');
+  })
+  .catch(() => {
+    document.getElementById('navStatus').textContent = '后端未连接';
+  });
+</script>
+
+</body>
+</html>
