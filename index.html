@@ -177,33 +177,52 @@ body {
   color: #999;
 }
 
-.file-info {
+.file-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-list:empty {
   display: none;
+}
+
+.file-list-item {
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  padding: 10px 16px;
   background: #f0fdf4;
   border-radius: 8px;
-  margin-top: 16px;
 }
 
-.file-info.show {
-  display: flex;
-}
-
-.file-info-name {
-  flex: 1;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.file-info-remove {
-  cursor: pointer;
-  color: #999;
+.file-list-item .file-item-icon {
   font-size: 18px;
 }
 
-.file-info-remove:hover {
+.file-list-item .file-item-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list-item .file-item-size {
+  font-size: 12px;
+  color: #999;
+}
+
+.file-list-item .file-item-remove {
+  cursor: pointer;
+  color: #999;
+  font-size: 18px;
+  transition: color 0.15s;
+}
+
+.file-list-item .file-item-remove:hover {
   color: var(--cibe-pink);
 }
 
@@ -516,6 +535,353 @@ body {
 }
 
 /* ============================================= */
+/* 编辑模式                                       */
+/* ============================================= */
+.edit-mode [contenteditable="true"] {
+  outline: 1px dashed rgba(227, 0, 79, 0.25);
+  outline-offset: 2px;
+  min-height: 1em;
+  border-radius: 3px;
+  transition: outline 0.15s, background 0.15s;
+}
+
+.edit-mode [contenteditable="true"]:hover {
+  outline-color: rgba(227, 0, 79, 0.45);
+}
+
+.edit-mode [contenteditable="true"]:focus {
+  outline: 2px solid var(--cibe-pink);
+  background: rgba(255, 240, 245, 0.3);
+}
+
+.edit-mode .cover-page [contenteditable="true"] {
+  outline-color: rgba(255, 255, 255, 0.3);
+}
+
+.edit-mode .cover-page [contenteditable="true"]:hover {
+  outline-color: rgba(255, 255, 255, 0.5);
+}
+
+.edit-mode .cover-page [contenteditable="true"]:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 编辑态 — 图表/配图操作浮层 */
+.edit-mode .chart-container,
+.edit-mode .image-container {
+  position: relative;
+}
+
+.edit-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+}
+
+.edit-overlay-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: transform 0.15s;
+  opacity: 0.85;
+}
+
+.edit-overlay-btn:hover {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.edit-overlay-btn.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.edit-overlay-btn.edit-chart {
+  background: var(--cibe-pink);
+  color: white;
+}
+
+/* 图表编辑弹窗 — 全功能可视化编辑器 */
+.chart-edit-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-edit-panel {
+  background: white;
+  border-radius: var(--radius);
+  width: 960px;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.ce-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+}
+.ce-header h3 {
+  font-size: 17px;
+  color: var(--cibe-dark);
+  margin: 0;
+}
+.ce-header-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.ce-header-close:hover { background: #f0f0f0; color: #333; }
+
+.ce-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 左侧控制面板 */
+.ce-controls {
+  width: 400px;
+  min-width: 360px;
+  overflow-y: auto;
+  padding: 20px 24px;
+  border-right: 1px solid #eee;
+}
+
+.ce-section {
+  margin-bottom: 20px;
+}
+.ce-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cibe-pink);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ce-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.ce-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.ce-row input, .ce-row select {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.ce-row input:focus, .ce-row select:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+}
+.ce-row input[type="color"] {
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  cursor: pointer;
+  flex: none;
+}
+.ce-row input[type="number"] {
+  width: 72px;
+  flex: none;
+}
+.ce-row input[type="range"] {
+  flex: 1;
+}
+
+/* 数据表格 */
+.ce-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.ce-data-table th {
+  background: #f8f9fa;
+  padding: 6px 8px;
+  font-weight: 600;
+  color: #555;
+  border: 1px solid #e0e0e0;
+  font-size: 12px;
+}
+.ce-data-table td {
+  padding: 2px;
+  border: 1px solid #e0e0e0;
+}
+.ce-data-table input {
+  width: 100%;
+  border: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: transparent;
+  text-align: center;
+}
+.ce-data-table input:focus {
+  outline: none;
+  background: #fff8f0;
+}
+.ce-data-table input.ce-label-input {
+  text-align: left;
+  font-weight: 500;
+}
+.ce-data-table .ce-series-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ce-data-table .ce-series-name input {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ce-table-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.ce-mini-btn {
+  padding: 5px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.15s;
+}
+.ce-mini-btn:hover {
+  border-color: var(--cibe-pink);
+  color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+.ce-mini-btn.danger:hover {
+  border-color: #dc3545;
+  color: #dc3545;
+  background: #fff5f5;
+}
+
+/* 颜色列表 */
+.ce-color-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ce-color-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* 右侧预览 */
+.ce-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  padding: 20px;
+  min-width: 300px;
+}
+.ce-preview-title {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.ce-preview-chart {
+  width: 100%;
+  height: 360px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+/* 底部操作栏 */
+.ce-footer {
+  display: flex;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid #eee;
+  justify-content: flex-end;
+}
+
+.ce-error {
+  color: #dc3545;
+  font-size: 12px;
+  padding: 0 24px 8px;
+  min-height: 0;
+}
+
+/* 编辑模式按钮高亮态 */
+.btn-edit-active {
+  background: var(--cibe-pink) !important;
+  color: white !important;
+  border-color: var(--cibe-pink) !important;
+}
+
+/* 正文段落首行缩进 */
+#contentBody p {
+  text-indent: 2em;
+}
+
+/* 一级标题（h2）分页与视觉分隔 */
+#contentBody h2 {
+  page-break-before: always;
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 2px solid #eee;
+}
+#contentBody h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ============================================= */
 /* 响应式                                         */
 /* ============================================= */
 @media (max-width: 860px) {
@@ -613,16 +979,12 @@ body {
            onclick="document.getElementById('fileInput').click()">
         <div class="dropzone-icon">📊</div>
         <div class="dropzone-title">拖拽文件到此处，或点击选择文件</div>
-        <div class="dropzone-hint">支持 CSV / Excel / Word (.docx) / PDF 格式</div>
+        <div class="dropzone-hint">支持 CSV / Excel / Word (.docx) / PDF 格式，可同时上传多个文件</div>
       </div>
-      <input type="file" id="fileInput" hidden
+      <input type="file" id="fileInput" hidden multiple
              accept=".csv,.xlsx,.xls,.docx,.pdf"
              onchange="handleFileSelect(event)">
-      <div class="file-info" id="fileInfo">
-        <span>📎</span>
-        <span class="file-info-name" id="fileName"></span>
-        <span class="file-info-remove" onclick="removeFile()">✕</span>
-      </div>
+      <div class="file-list" id="fileList"></div>
     </div>
 
     <!-- 文字粘贴面板 -->
@@ -649,6 +1011,7 @@ body {
 
   <!-- 工具栏 -->
   <div class="toolbar" id="toolbar">
+    <button class="btn btn-outline" id="btnEditMode" onclick="toggleEditMode()">✏️ 编辑模式</button>
     <button class="btn btn-outline" onclick="window.print()">🖨️ 打印预览</button>
     <button class="btn btn-secondary" id="btnExport" onclick="exportPDF()">📄 导出 PDF</button>
   </div>
@@ -678,13 +1041,123 @@ body {
 <!-- Toast 通知 -->
 <div class="toast" id="toast"></div>
 
+<!-- 图表编辑弹窗 — 全功能可视化编辑器 -->
+<div class="chart-edit-modal" id="chartEditModal" style="display:none" onclick="if(event.target===this)closeChartEditor()">
+  <div class="chart-edit-panel">
+    <!-- 顶栏 -->
+    <div class="ce-header">
+      <h3>📊 图表编辑器</h3>
+      <button class="ce-header-close" onclick="closeChartEditor()" title="关闭">&times;</button>
+    </div>
+
+    <div class="ce-body">
+      <!-- 左侧控制面板 -->
+      <div class="ce-controls">
+
+        <!-- 基础设置 -->
+        <div class="ce-section">
+          <div class="ce-section-title">⚙️ 基础设置</div>
+          <div class="ce-row">
+            <label>标题</label>
+            <input type="text" id="ceTitle" placeholder="图表标题" oninput="cePreview()">
+          </div>
+          <div class="ce-row">
+            <label>类型</label>
+            <select id="ceType" onchange="cePreview()">
+              <option value="bar">📊 柱状图</option>
+              <option value="line">📈 折线图</option>
+              <option value="pie">🥧 饼图</option>
+              <option value="area">📉 面积图</option>
+              <option value="scatter">⭕ 散点图</option>
+            </select>
+          </div>
+          <div class="ce-row">
+            <label>宽度</label>
+            <input type="number" id="ceWidth" value="100" min="50" max="100" step="5" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">%</span>
+            <label style="margin-left:8px">高度</label>
+            <input type="number" id="ceHeight" value="380" min="200" max="600" step="20" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">px</span>
+          </div>
+        </div>
+
+        <!-- 样式设置 -->
+        <div class="ce-section">
+          <div class="ce-section-title">🎨 样式设置</div>
+          <div class="ce-row">
+            <label>圆角</label>
+            <input type="range" id="ceBorderRadius" min="0" max="20" value="4" oninput="cePreview()">
+            <span id="ceBorderRadiusVal" style="font-size:12px;color:#999;min-width:30px">4px</span>
+          </div>
+          <div class="ce-row">
+            <label>柱宽</label>
+            <input type="range" id="ceBarWidth" min="10" max="80" value="50" oninput="cePreview()">
+            <span id="ceBarWidthVal" style="font-size:12px;color:#999;min-width:36px">50px</span>
+          </div>
+          <div class="ce-row">
+            <label>线宽</label>
+            <input type="range" id="ceLineWidth" min="1" max="8" value="2" oninput="cePreview()">
+            <span id="ceLineWidthVal" style="font-size:12px;color:#999;min-width:30px">2px</span>
+          </div>
+          <div class="ce-row">
+            <label>字号</label>
+            <input type="number" id="ceFontSize" value="14" min="10" max="24" step="1" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">px</span>
+          </div>
+          <div class="ce-row" style="flex-wrap:wrap">
+            <label>配色</label>
+            <div class="ce-color-list" id="ceColorList"></div>
+          </div>
+        </div>
+
+        <!-- 数据编辑 -->
+        <div class="ce-section">
+          <div class="ce-section-title">📋 数据编辑</div>
+          <div style="overflow-x:auto">
+            <table class="ce-data-table" id="ceDataTable">
+              <thead id="ceDataThead"></thead>
+              <tbody id="ceDataTbody"></tbody>
+            </table>
+          </div>
+          <div class="ce-table-actions">
+            <button class="ce-mini-btn" onclick="ceAddRow()">➕ 添加行</button>
+            <button class="ce-mini-btn danger" onclick="ceRemoveRow()">🗑️ 删除末行</button>
+            <button class="ce-mini-btn" onclick="ceAddSeries()">➕ 添加系列</button>
+            <button class="ce-mini-btn danger" onclick="ceRemoveSeries()">🗑️ 删除末列</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右侧实时预览 -->
+      <div class="ce-preview">
+        <div class="ce-preview-title">实时预览</div>
+        <div class="ce-preview-chart" id="cePreviewChart"></div>
+      </div>
+    </div>
+
+    <!-- 错误信息 -->
+    <div class="ce-error" id="ceError"></div>
+
+    <!-- 底部操作 -->
+    <div class="ce-footer">
+      <button class="btn btn-outline" onclick="closeChartEditor()">取消</button>
+      <button class="btn btn-primary" style="flex:none;padding:10px 28px" onclick="applyChartEdit()">✅ 应用修改</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // =============================================================
 // 全局状态
 // =============================================================
-let selectedFile = null;
+let selectedFiles = [];
 let chartInstances = [];
 let isExporting = false;
+let isEditMode = false;
+let chartDataStore = {};   // chart element ID → { type, title, data }
+let editingChartId = null; // 当前正在编辑的图表 ID
+const MAX_FILES = 10;
 const API_BASE = window.location.origin;
 
 // =============================================================
@@ -713,30 +1186,50 @@ function handleDragLeave(e) {
 function handleDrop(e) {
   e.preventDefault();
   document.getElementById('dropzone').classList.remove('dragover');
-  const files = e.dataTransfer.files;
-  if (files.length > 0) setFile(files[0]);
+  Array.from(e.dataTransfer.files).forEach(f => addFile(f));
 }
 
 function handleFileSelect(e) {
-  if (e.target.files.length > 0) setFile(e.target.files[0]);
+  Array.from(e.target.files).forEach(f => addFile(f));
+  e.target.value = '';  // 允许重复选择同名文件
 }
 
-function setFile(file) {
+function addFile(file) {
   const validExts = ['csv', 'xlsx', 'xls', 'docx', 'pdf'];
   const ext = file.name.split('.').pop().toLowerCase();
   if (!validExts.includes(ext)) {
-    showToast('不支持的文件格式，请上传 CSV/Excel/Word/PDF', 'error');
+    showToast(`不支持的格式: ${file.name}，请上传 CSV/Excel/Word/PDF`, 'error');
     return;
   }
-  selectedFile = file;
-  document.getElementById('fileName').textContent = `${file.name} (${formatSize(file.size)})`;
-  document.getElementById('fileInfo').classList.add('show');
+  if (selectedFiles.length >= MAX_FILES) {
+    showToast(`最多上传 ${MAX_FILES} 个文件`, 'error');
+    return;
+  }
+  // 查重
+  if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) return;
+  selectedFiles.push(file);
+  renderFileList();
 }
 
-function removeFile() {
-  selectedFile = null;
-  document.getElementById('fileInput').value = '';
-  document.getElementById('fileInfo').classList.remove('show');
+function removeFileAt(index) {
+  selectedFiles.splice(index, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  const container = document.getElementById('fileList');
+  if (selectedFiles.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-list-item">
+      <span class="file-item-icon">📎</span>
+      <span class="file-item-name">${escapeHtml(f.name)}</span>
+      <span class="file-item-size">${formatSize(f.size)}</span>
+      <span class="file-item-remove" onclick="removeFileAt(${i})">✕</span>
+    </div>
+  `).join('');
 }
 
 function formatSize(bytes) {
@@ -752,8 +1245,8 @@ async function generateWhitepaper() {
   const textInput = document.getElementById('textInput').value.trim();
   const activeTab = document.querySelector('.upload-tab.active').dataset.tab;
 
-  if (activeTab === 'file' && !selectedFile) {
-    showToast('请先上传一个数据文件', 'error');
+  if (activeTab === 'file' && selectedFiles.length === 0) {
+    showToast('请先上传至少一个数据文件', 'error');
     return;
   }
   if (activeTab === 'text' && !textInput) {
@@ -761,10 +1254,10 @@ async function generateWhitepaper() {
     return;
   }
 
-  // 准备表单数据
+  // 准备表单数据（支持多文件）
   const formData = new FormData();
-  if (activeTab === 'file' && selectedFile) {
-    formData.append('file', selectedFile);
+  if (activeTab === 'file') {
+    selectedFiles.forEach(f => formData.append('files', f));
   } else {
     formData.append('text', textInput);
   }
@@ -893,10 +1386,16 @@ async function renderWhitepaper(markdown) {
   await new Promise(r => setTimeout(r, 100));
   chartInstances.forEach(c => c.resize());
 
-  // 4. 异步生成配图（不阻塞主流程）
+  // 4. 保存图表数据到全局（供编辑模式使用）
+  chartDataStore = { ...chartDataMap };
+
+  // 5. 异步生成配图（不阻塞主流程）
   for (const [id, prompt] of Object.entries(imagePromptMap)) {
     generateAndFillImage(id, prompt);
   }
+
+  // 6. 重置编辑模式
+  if (isEditMode) toggleEditMode();
 }
 
 // =============================================================
@@ -1073,6 +1572,10 @@ async function exportPDF() {
   btn.disabled = true;
   btn.innerHTML = '⏳ 导出中...';
 
+  // 临时退出编辑模式（移除 UI 干扰元素）
+  const wasEditMode = isEditMode;
+  if (wasEditMode) toggleEditMode();
+
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -1120,6 +1623,24 @@ async function exportPDF() {
       const block = blocks[i];
       if (!block.offsetHeight || block.offsetHeight < 2) continue;
 
+      // 检测是否为 h2（一级标题），或包含 h2 的 hr 分隔线后的第一个块
+      // h2 元素 = 执行摘要、目录、研究说明、各章标题、结论等 → 强制新起一页
+      const isH2 = block.tagName === 'H2';
+      const isHR = block.tagName === 'HR';
+
+      // hr 分隔线跳过不渲染（视觉分页已由强制换页替代）
+      if (isHR) {
+        needNewPage = true;
+        continue;
+      }
+
+      // h2 标题强制新起一页
+      if (isH2 || needNewPage) {
+        pdf.addPage();
+        cursorY = MARGIN;
+        needNewPage = false;
+      }
+
       const blockCanvas = await html2canvas(block, {
         scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false,
       });
@@ -1130,10 +1651,9 @@ async function exportPDF() {
       const blockHmm = blockWmm * blockRatio;
 
       // 如果这个块放不下当前页的剩余空间，换新页
-      if (needNewPage || (cursorY + blockHmm > PAGE_H - MARGIN)) {
+      if (cursorY + blockHmm > PAGE_H - MARGIN) {
         pdf.addPage();
         cursorY = MARGIN;
-        needNewPage = false;
       }
 
       // 超高块（比一整页还高）：缩放填满页面
@@ -1167,6 +1687,8 @@ async function exportPDF() {
     isExporting = false;
     btn.disabled = false;
     btn.innerHTML = '📄 导出 PDF';
+    // 恢复编辑模式
+    if (wasEditMode) toggleEditMode();
   }
 }
 
@@ -1206,6 +1728,436 @@ function resizeAllCharts() {
 // 初始化
 // =============================================================
 window.addEventListener('resize', resizeAllCharts);
+
+// =============================================================
+// 编辑模式
+// =============================================================
+const EDITABLE_SELECTORS = 'h2, h3, p, li, blockquote, th, td';
+
+function toggleEditMode() {
+  isEditMode = !isEditMode;
+  const card = document.getElementById('previewCard');
+  const btn = document.getElementById('btnEditMode');
+
+  if (isEditMode) {
+    card.classList.add('edit-mode');
+    btn.classList.add('btn-edit-active');
+    btn.innerHTML = '✏️ 退出编辑';
+
+    // 封面可编辑
+    document.getElementById('coverTitle').setAttribute('contenteditable', 'true');
+    document.getElementById('coverSubtitle').setAttribute('contenteditable', 'true');
+
+    // 正文叶级元素可编辑
+    document.querySelectorAll(`#contentBody ${EDITABLE_SELECTORS}`).forEach(el => {
+      el.setAttribute('contenteditable', 'true');
+    });
+
+    // 注入操作浮层
+    injectEditOverlays();
+
+    // 粘贴净化
+    document.getElementById('contentBody').addEventListener('paste', pasteAsPlainText, true);
+    document.getElementById('coverPage').addEventListener('paste', pasteAsPlainText, true);
+
+  } else {
+    card.classList.remove('edit-mode');
+    btn.classList.remove('btn-edit-active');
+    btn.innerHTML = '✏️ 编辑模式';
+
+    // 移除 contenteditable
+    document.getElementById('coverTitle').removeAttribute('contenteditable');
+    document.getElementById('coverSubtitle').removeAttribute('contenteditable');
+    document.querySelectorAll(`#contentBody [contenteditable]`).forEach(el => {
+      el.removeAttribute('contenteditable');
+    });
+
+    // 移除浮层
+    removeEditOverlays();
+
+    // 移除粘贴监听
+    document.getElementById('contentBody').removeEventListener('paste', pasteAsPlainText, true);
+    document.getElementById('coverPage').removeEventListener('paste', pasteAsPlainText, true);
+  }
+}
+
+function pasteAsPlainText(e) {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text/plain');
+  document.execCommand('insertText', false, text);
+}
+
+// --- 操作浮层 ---
+function injectEditOverlays() {
+  removeEditOverlays(); // 清理残留
+
+  // 图表浮层：编辑 + 删除
+  document.querySelectorAll('#contentBody .chart-container').forEach(el => {
+    const overlay = document.createElement('div');
+    overlay.className = 'edit-overlay';
+    overlay.innerHTML = `
+      <button class="edit-overlay-btn edit-chart" title="编辑图表" onclick="openChartEditor('${el.id}')">✏️</button>
+      <button class="edit-overlay-btn delete" title="删除图表" onclick="deleteElement('${el.id}')">🗑️</button>
+    `;
+    el.appendChild(overlay);
+  });
+
+  // 配图浮层：仅删除
+  document.querySelectorAll('#contentBody .image-container').forEach(el => {
+    const overlay = document.createElement('div');
+    overlay.className = 'edit-overlay';
+    overlay.innerHTML = `
+      <button class="edit-overlay-btn delete" title="删除配图" onclick="deleteElement('${el.id}')">🗑️</button>
+    `;
+    el.appendChild(overlay);
+  });
+}
+
+function removeEditOverlays() {
+  document.querySelectorAll('.edit-overlay').forEach(el => el.remove());
+}
+
+// --- 删除图表/配图 ---
+function deleteElement(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  // 如果是图表，销毁 ECharts 实例
+  if (id.startsWith('chart-')) {
+    const idx = chartInstances.findIndex(c => c.getDom() === el);
+    if (idx !== -1) {
+      chartInstances[idx].dispose();
+      chartInstances.splice(idx, 1);
+    }
+    delete chartDataStore[id];
+  }
+
+  el.remove();
+}
+
+// --- 图表可视化编辑器 ---
+let cePreviewInstance = null;  // 编辑器内的预览 ECharts 实例
+let ceColors = [];             // 当前编辑中的配色数组
+let ceChartSize = { width: 100, height: 380 }; // 图表尺寸
+
+function openChartEditor(chartId) {
+  editingChartId = chartId;
+  const cfg = chartDataStore[chartId];
+  if (!cfg) return;
+
+  // 填充基础设置
+  document.getElementById('ceTitle').value = cfg.title || '';
+  document.getElementById('ceType').value = cfg.type || 'bar';
+  document.getElementById('ceError').textContent = '';
+
+  // 读取已保存的样式或使用默认值
+  const style = cfg.style || {};
+  ceChartSize = { width: style.width || 100, height: style.height || 380 };
+  document.getElementById('ceWidth').value = ceChartSize.width;
+  document.getElementById('ceHeight').value = ceChartSize.height;
+  document.getElementById('ceBorderRadius').value = style.borderRadius ?? 4;
+  document.getElementById('ceBorderRadiusVal').textContent = (style.borderRadius ?? 4) + 'px';
+  document.getElementById('ceBarWidth').value = style.barWidth ?? 50;
+  document.getElementById('ceBarWidthVal').textContent = (style.barWidth ?? 50) + 'px';
+  document.getElementById('ceLineWidth').value = style.lineWidth ?? 2;
+  document.getElementById('ceLineWidthVal').textContent = (style.lineWidth ?? 2) + 'px';
+  document.getElementById('ceFontSize').value = style.fontSize ?? 14;
+
+  // 配色
+  ceColors = style.colors ? [...style.colors] : [...CIBE_COLORS];
+  ceBuildColorPickers();
+
+  // 构建数据表格
+  ceBuildDataTable(cfg.data);
+
+  // 显示弹窗
+  document.getElementById('chartEditModal').style.display = 'flex';
+
+  // 初始化预览（延迟一帧让DOM渲染完）
+  requestAnimationFrame(() => {
+    const previewEl = document.getElementById('cePreviewChart');
+    if (cePreviewInstance) { cePreviewInstance.dispose(); }
+    cePreviewInstance = echarts.init(previewEl);
+    cePreview();
+  });
+}
+
+function closeChartEditor() {
+  document.getElementById('chartEditModal').style.display = 'none';
+  if (cePreviewInstance) { cePreviewInstance.dispose(); cePreviewInstance = null; }
+  editingChartId = null;
+}
+
+// --- 配色管理 ---
+function ceBuildColorPickers() {
+  const container = document.getElementById('ceColorList');
+  // 保证至少有 8 个颜色槽
+  while (ceColors.length < 8) ceColors.push(CIBE_COLORS[ceColors.length % CIBE_COLORS.length]);
+  container.innerHTML = ceColors.slice(0, 8).map((c, i) =>
+    `<div class="ce-color-item">
+       <input type="color" value="${c}" onchange="ceColors[${i}]=this.value;cePreview()" title="系列${i+1}">
+       <span>${i+1}</span>
+     </div>`
+  ).join('');
+}
+
+// --- 数据表格构建 ---
+function ceBuildDataTable(data) {
+  const thead = document.getElementById('ceDataThead');
+  const tbody = document.getElementById('ceDataTbody');
+  const labels = data.labels || [];
+  const datasets = data.datasets || [];
+
+  // 表头：标签 | 系列1 | 系列2 | ...
+  thead.innerHTML = '<tr><th style="min-width:90px">标签</th>' +
+    datasets.map((ds, i) =>
+      `<th style="min-width:80px">
+        <div class="ce-series-name">
+          <input type="text" value="${ds.name || '系列'+(i+1)}" data-series="${i}" class="ce-sname" oninput="cePreview()">
+        </div>
+      </th>`
+    ).join('') + '</tr>';
+
+  // 数据行
+  tbody.innerHTML = labels.map((label, r) =>
+    '<tr><td><input class="ce-label-input" value="' + label + '" data-row="' + r + '" oninput="cePreview()"></td>' +
+    datasets.map((ds, c) =>
+      '<td><input type="number" value="' + (ds.values[r] ?? 0) + '" data-row="' + r + '" data-col="' + c + '" oninput="cePreview()"></td>'
+    ).join('') + '</tr>'
+  ).join('');
+}
+
+// --- 从表格读取数据 ---
+function ceReadTableData() {
+  const labels = [];
+  const seriesNames = [];
+  const seriesValues = [];
+
+  // 读取系列名
+  document.querySelectorAll('#ceDataThead .ce-sname').forEach(inp => {
+    seriesNames.push(inp.value.trim() || '系列');
+  });
+
+  // 初始化 values 数组
+  seriesNames.forEach(() => seriesValues.push([]));
+
+  // 读取每行
+  document.querySelectorAll('#ceDataTbody tr').forEach(tr => {
+    const cells = tr.querySelectorAll('input');
+    labels.push(cells[0].value.trim() || '');
+    for (let c = 1; c < cells.length; c++) {
+      seriesValues[c - 1].push(parseFloat(cells[c].value) || 0);
+    }
+  });
+
+  return {
+    labels,
+    datasets: seriesNames.map((name, i) => ({ name, values: seriesValues[i] }))
+  };
+}
+
+// --- 添加/删除行列 ---
+function ceAddRow() {
+  const data = ceReadTableData();
+  data.labels.push('新标签');
+  data.datasets.forEach(ds => ds.values.push(0));
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceRemoveRow() {
+  const data = ceReadTableData();
+  if (data.labels.length <= 1) return;
+  data.labels.pop();
+  data.datasets.forEach(ds => ds.values.pop());
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceAddSeries() {
+  const data = ceReadTableData();
+  if (data.datasets.length >= 5) return; // 最多5个系列
+  data.datasets.push({ name: '系列' + (data.datasets.length + 1), values: data.labels.map(() => 0) });
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceRemoveSeries() {
+  const data = ceReadTableData();
+  if (data.datasets.length <= 1) return;
+  data.datasets.pop();
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+// --- 实时预览 ---
+function cePreview() {
+  if (!cePreviewInstance) return;
+  // 更新 slider 标签
+  document.getElementById('ceBorderRadiusVal').textContent = document.getElementById('ceBorderRadius').value + 'px';
+  document.getElementById('ceBarWidthVal').textContent = document.getElementById('ceBarWidth').value + 'px';
+  document.getElementById('ceLineWidthVal').textContent = document.getElementById('ceLineWidth').value + 'px';
+
+  const type = document.getElementById('ceType').value;
+  const title = document.getElementById('ceTitle').value.trim();
+  const data = ceReadTableData();
+  const borderRadius = parseInt(document.getElementById('ceBorderRadius').value) || 0;
+  const barWidth = parseInt(document.getElementById('ceBarWidth').value) || 50;
+  const lineWidth = parseInt(document.getElementById('ceLineWidth').value) || 2;
+  const fontSize = parseInt(document.getElementById('ceFontSize').value) || 14;
+
+  // 构建自定义 option
+  const option = buildChartOptionAdvanced(type, title, data, {
+    colors: ceColors.slice(0, 8),
+    borderRadius,
+    barWidth,
+    lineWidth,
+    fontSize,
+  });
+
+  cePreviewInstance.setOption(option, true);
+  cePreviewInstance.resize();
+}
+
+// --- 高级 buildChartOption（带样式参数）---
+function buildChartOptionAdvanced(type, title, data, style) {
+  const colors = style.colors || CIBE_COLORS;
+  const borderRadius = style.borderRadius ?? 4;
+  const barWidth = style.barWidth ?? 50;
+  const lineWidth = style.lineWidth ?? 2;
+  const fontSize = style.fontSize ?? 14;
+
+  const base = {
+    title: {
+      text: title,
+      left: 'center',
+      top: 12,
+      textStyle: {
+        fontSize: fontSize,
+        fontWeight: 700,
+        color: '#1A1A2E',
+        width: 600,
+        overflow: 'break',
+      },
+    },
+    tooltip: {
+      trigger: type === 'pie' ? 'item' : 'axis',
+      confine: true,
+    },
+    color: colors,
+    animation: true,
+  };
+
+  if (type === 'pie') {
+    return {
+      ...base,
+      legend: { bottom: 10, left: 'center', textStyle: { fontSize: 11 }, type: 'scroll' },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '58%'],
+        center: ['50%', '48%'],
+        data: data.labels.map((label, i) => ({ name: label, value: data.datasets[0]?.values[i] ?? 0 })),
+        label: { formatter: '{b}\n{d}%', fontSize: 11, lineHeight: 16, position: 'outside' },
+        labelLine: { length: 12, length2: 8 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
+        itemStyle: { borderRadius: borderRadius },
+      }],
+    };
+  }
+
+  if (type === 'scatter') {
+    return {
+      ...base,
+      grid: { left: 50, right: 30, top: 50, bottom: 40, containLabel: true },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'value' },
+      series: data.datasets.map((ds, i) => ({
+        name: ds.name, type: 'scatter',
+        data: ds.values.map((v, j) => [data.labels[j] || j, v]),
+        symbolSize: 14,
+      })),
+    };
+  }
+
+  // bar / line / area
+  const chartType = type === 'area' ? 'line' : type;
+  return {
+    ...base,
+    grid: { left: 20, right: 30, top: 55, bottom: 45, containLabel: true },
+    xAxis: {
+      type: 'category', data: data.labels,
+      axisLabel: { fontSize: 11, interval: 0, rotate: data.labels.length > 6 ? 30 : 0 },
+      axisTick: { alignWithLabel: true },
+    },
+    yAxis: {
+      type: 'value', axisLabel: { fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } },
+    },
+    legend: { bottom: 5, textStyle: { fontSize: 11 }, type: 'scroll' },
+    series: data.datasets.map((ds, i) => ({
+      name: ds.name,
+      type: chartType,
+      data: ds.values,
+      smooth: true,
+      lineStyle: { width: lineWidth },
+      areaStyle: type === 'area' ? { opacity: 0.15 } : undefined,
+      barMaxWidth: barWidth,
+      barMinWidth: Math.min(15, barWidth),
+      itemStyle: { borderRadius: type === 'bar' ? [borderRadius, borderRadius, 0, 0] : 0 },
+      label: {
+        show: data.datasets.length === 1 && data.labels.length <= 8,
+        position: 'top', fontSize: 11, color: '#666',
+      },
+    })),
+  };
+}
+
+// --- 应用修改到正文图表 ---
+function applyChartEdit() {
+  const chartId = editingChartId;
+  if (!chartId) return;
+
+  const newTitle = document.getElementById('ceTitle').value.trim();
+  const newType = document.getElementById('ceType').value;
+  const newData = ceReadTableData();
+
+  // 验证
+  if (!newData.labels.length || !newData.datasets.length) {
+    document.getElementById('ceError').textContent = '数据不能为空';
+    return;
+  }
+
+  const newStyle = {
+    width: parseInt(document.getElementById('ceWidth').value) || 100,
+    height: parseInt(document.getElementById('ceHeight').value) || 380,
+    borderRadius: parseInt(document.getElementById('ceBorderRadius').value) || 0,
+    barWidth: parseInt(document.getElementById('ceBarWidth').value) || 50,
+    lineWidth: parseInt(document.getElementById('ceLineWidth').value) || 2,
+    fontSize: parseInt(document.getElementById('ceFontSize').value) || 14,
+    colors: [...ceColors.slice(0, 8)],
+  };
+
+  // 更新全局存储（包含样式）
+  chartDataStore[chartId] = { type: newType, title: newTitle, data: newData, style: newStyle };
+
+  // 找到对应 ECharts 实例并重新渲染
+  const el = document.getElementById(chartId);
+  if (el) {
+    // 调整图表容器高度
+    el.style.height = newStyle.height + 'px';
+    const instance = chartInstances.find(c => c.getDom() === el);
+    if (instance) {
+      instance.resize();
+      instance.setOption(buildChartOptionAdvanced(newType, newTitle, newData, newStyle), true);
+    }
+  }
+
+  closeChartEditor();
+}
+
+// =============================================================
+// 初始化
+// =============================================================
 
 // 健康检查
 fetch(`${API_BASE}/api/health`)

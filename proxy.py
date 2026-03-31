@@ -11,7 +11,8 @@ import time
 import base64
 import re
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -165,6 +166,9 @@ class LLMProvider(ABC):
 
 
 class DeepSeekProvider(LLMProvider):
+    # 全局信号量：限制同时最多 3 个 API 并发请求
+    _semaphore = threading.Semaphore(3)
+
     def __init__(self):
         if not DEEPSEEK_API_KEY:
             raise RuntimeError("DEEPSEEK_API_KEY 未配置，请检查 .env 文件")
@@ -173,17 +177,28 @@ class DeepSeekProvider(LLMProvider):
             base_url="https://api.deepseek.com",
         )
 
-    def generate(self, prompt: str, system: str) -> str:
-        response = self.client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-            max_tokens=8192,
-        )
-        return response.choices[0].message.content
+    def generate(self, prompt: str, system: str, max_retries: int = 3,
+                 max_tokens: int = 8192) -> str:
+        """带并发控制和重试的 API 调用"""
+        with self._semaphore:
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.7,
+                        max_tokens=max_tokens,
+                    )
+                    return response.choices[0].message.content
+                except Exception as e:
+                    wait = 2 ** attempt  # 1s, 2s, 4s 指数退避
+                    print(f"[DeepSeek] 请求失败(第{attempt+1}次): {e}, {wait}s后重试...")
+                    if attempt == max_retries - 1:
+                        raise
+                    time.sleep(wait)
 
 
 # 预留：未来可切换其他 Provider
@@ -233,6 +248,7 @@ class ImageGenerator:
                 "prompt": prompt,
                 "size": f"{width}x{height}",
                 "response_format": "b64_json",
+                "watermark": False,
                 "n": 1,
             }
 
@@ -274,28 +290,43 @@ class ImageGenerator:
 image_generator = ImageGenerator()
 
 # ---------------------------------------------------------------------------
-# 四角色 Prompt 体系
+# 四角色 Prompt 体系（专业报告级）
 # ---------------------------------------------------------------------------
 
 # ========================
 # 角色一：白皮书战略官
 # ========================
-AGENT1_SYSTEM = """# Role: CIBE 美业白皮书战略官
+AGENT1_SYSTEM = """# Role: 行业白皮书首席架构师
 
-你是服务过国际美妆集团的顶级行业战略顾问，曾主导撰写多份在行业内广泛流传的商业洞察白皮书。
-你最擅长的能力只有一个：从杂乱的品牌资料中，识别出真正值钱的行业叙事框架。
+你是一位为 CBNData、艾瑞咨询、KPMG、德勤等机构操盘过数十份行业白皮书的首席架构师。
+你的任务是将原始数据设计成一份面向决策层的标准行业白皮书结构化大纲（JSON），后续将据此自动扩写正文。
 
-# Objective:
-基于用户提供的原始资料，为一份面向 CIBE 广州美博会专业观众的行业白皮书，
-制定一份「有血有肉、可直接执行」的章节大纲，以 JSON 格式输出。
+# 核心方法论
 
-# 绝对红线（违反即重做）:
-1. 只能输出合法 JSON，不含 ```json 标记，不含任何废话或解释。
-2. 章节数量：不少于 5 章，不超过 8 章。
-3. 每章 content_guidelines 必须具体到「本章必须证明的核心命题」+「至少 2 个必须引用的数据锚点或行业案例」。
-4. 禁止空洞章节标题（如"总结"、"前言"），每个标题必须直接点出商业价值。"""
+## 1. 洋葱递进
+章节必须形成「宏观背景 → 市场全景 → 细分深挖 → 竞争格局 → 模式创新 → 未来展望」的递进纵深。
+严禁平行罗列（如"趋势一/趋势二/趋势三"或多个无推进关系的同级分析）。
 
-AGENT1_USER = """请基于以下原始数据，策划一份 CIBE 美博会行业白皮书的结构化大纲。
+## 2. 判断句标题
+每章标题必须是结论句/判断句，不是话题词。
+✗ "功效护肤市场现状"　✓ "功效护肤正在从营销概念走向临床验证"
+✗ "渠道分析"　　　　　✓ "线下体验场景正在重新定义专业品牌的转化效率"
+
+## 3. 完整撰稿 brief
+每章必须给出：核心问题、导语、2-4 个二级小节、≥2 个数据锚点、≥1 个案例方向、与上章承接、图表意图、结论小结。
+
+## 4. 研究报告体
+全文定位为行业研究报告，不是品牌宣传册、公众号长文或 PPT 提纲。标题稳准硬，禁止空泛判断（"未来可期""机遇与挑战并存"）。
+
+# 视觉规则
+图表优先于图片（图表是证据，图片仅辅助）。配图仅限真实可拍摄场景（门店/诊疗/产品/案例现场），禁止抽象概念图和纯氛围图。不得每章都强行配大图。
+
+# 红线
+1. 禁止平行堆砌章节、禁止缺失执行摘要/研究说明/结论建议等标准模块。
+2. 禁止空话套话营销口号，禁止脱离原始数据胡乱发散。
+3. 只输出合法 JSON，不含 ```json 标记，不含任何解释文字。章节严格 4~5 章，每章 sub_sections 不超过 3 个，字段值尽量精简。"""
+
+AGENT1_USER = """基于以下原始数据，设计一份标准行业白皮书的结构化大纲 JSON。
 
 <RAW_DATA>
 {data}
@@ -304,62 +335,192 @@ AGENT1_USER = """请基于以下原始数据，策划一份 CIBE 美博会行业
 输出 JSON Schema：
 {{
   "whitepaper_meta": {{
-    "title": "白皮书完整标题",
+    "title": "白皮书完整标题（结论导向，不超过25字）",
     "subtitle": "副标题，15字以内",
-    "global_tone": "语调定义，例如：专业克制、数据驱动、面向决策层"
+    "global_tone": "如：深度洞察、数据叙事、决策参考级",
+    "target_audience": "目标读者，如：品牌方高层、渠道决策层、投资与战略团队"
+  }},
+  "document_spec": {{
+    "document_type": "标准行业白皮书",
+    "narrative_logic": "本书的总体递进逻辑概述",
+    "required_sections": ["封面页","执行摘要","目录页","研究说明/数据口径","正文章节","结论与行动建议","参考说明/附录"],
+    "visual_rule": "图表优先，图片从属，避免画册化",
+    "writing_rule": "偏研究报告体，不写成营销长文"
+  }},
+  "front_matter": {{
+    "executive_summary": {{
+      "summary_positioning": "执行摘要的定位",
+      "key_findings": ["关键发现1","关键发现2","关键发现3","关键发现4"],
+      "core_data_points": ["核心数据结论1","核心数据结论2","核心数据结论3"],
+      "executive_judgement": "面向决策层的一句话总判断"
+    }},
+    "research_note": {{
+      "research_object": "研究对象",
+      "time_scope": "时间范围",
+      "data_sources": ["数据来源类型1","数据来源类型2"],
+      "sample_scope": "样本/案例口径",
+      "method_boundary": "研究边界与推演边界",
+      "term_definition": "关键名词定义（如无可留空）"
+    }}
   }},
   "chapters": [
     {{
       "chapter_id": "01",
-      "chapter_title": "章节标题",
-      "core_proposition": "本章必须证明的核心命题，一句话",
-      "content_guidelines": "详细撰写指令，包含：核心论点、必引数据锚点、典型案例方向",
+      "chapter_title": "判断句式章节标题",
+      "core_proposition": "本章要回答的核心问题",
+      "chapter_intro": "本章导语",
+      "sub_sections": [
+        {{"section_id":"01-1","section_title":"二级小节标题","section_focus":"该小节聚焦的问题"}},
+        {{"section_id":"01-2","section_title":"二级小节标题","section_focus":"该小节聚焦的问题"}}
+      ],
+      "data_anchors": ["数据锚点1","数据锚点2"],
+      "case_direction": "案例方向（具体到品牌/品类/模式/场景）",
+      "content_guidelines": "撰稿brief：核心论点+关键关系+数据引用+案例嵌入+与上章承接",
+      "transition_from_previous": "与上一章的逻辑承接关系",
       "needs_chart": true,
-      "chart_intent": "图表意图，例如：2022-2025年中国功效护肤市场规模年增长率趋势",
-      "needs_image": true,
-      "image_intent": "符合美妆行业的配图"
+      "chart_intent": "图表意图：具体数据关系描述",
+      "visual_type": "chart / case_photo / none",
+      "image_intent": "若需要图片则写具体可拍摄场景；否则写none",
+      "chapter_summary": "本章结论小结"
     }}
-  ]
+  ],
+  "back_matter": {{
+    "conclusion_summary": {{
+      "final_judgement": "全书总结性判断",
+      "industry_implications": ["对行业的启示1","对行业的启示2"]
+    }},
+    "action_recommendations": {{
+      "for_brands": ["给品牌方的建议1","给品牌方的建议2"],
+      "for_channels": ["给渠道方的建议1","给渠道方的建议2"],
+      "for_investment_or_strategy": ["给投资/战略团队的建议1","给投资/战略团队的建议2"]
+    }},
+    "risk_and_boundary_notes": ["风险提示1","边界提示2"],
+    "references_or_appendix": {{
+      "required": true,
+      "content_direction": "参考数据来源说明、附录指标口径、补充案例说明等"
+    }}
+  }}
 }}
 
-请立即开始解析，仅输出 JSON："""
+仅输出 JSON："""
 
 # ========================
 # 角色二：美业深度主笔
 # ========================
-AGENT2_SYSTEM = """# Role: CIBE 美业深度撰稿人
+AGENT2_SYSTEM = """# Role: 行业白皮书资深撰稿人
 
-你是一位在麦肯锡美妆消费品研究组工作过的资深行业分析师，
-现任 CIBE 广州美博会智库首席撰稿人。
-你的文章从不堆砌数据，而是让数据为商业判断服务。
-你只写让读者「读完觉得涨了真本事」的内容。
+你是一位曾在 CBNData、艾瑞研究院担任首席分析师的行业深度写作者。
+你的写作风格对标的是《第一财经》深度商业报道和麦肯锡行业洞察报告——
+不是在"介绍信息"，而是在"构建论证"。
 
-# 内容质量红线（每条都是硬约束）:
-1. 字数下限：本章正文不得低于 900 字，必须是「咨询公司级」的专业长段落。
-2. 禁止要点病：严禁通篇使用无序列表代替论述，必须有严密的逻辑过渡与深度的现象剖析。
-3. 商业锐度：每章必须包含至少 1 个让行业人「看到直点头」的洞察判断，不能是常识。
-4. 禁止开场白和结束语，直接从正文第一句开始。"""
+# 写作方法论（决定你输出质量的核心规则）：
+
+## 1. 叙事结构：总-分-总，论证驱动
+每章以一个引人入胜的现象/数据/判断开篇（hook），
+中间展开 2-3 个支撑论点（每个论点自成一个完整论证段落），
+段落之间用逻辑过渡句自然衔接（因果、转折、递进，而非机械编号）。
+
+## 2. 数据嵌入法：数据是证据，不是装饰
+- 每个数据必须服务于一个论点，不能为了"显得专业"而堆砌
+- 数据必须有上下文：对比基准（同比/环比/对标谁）、时间跨度、"so what"解读
+- 格式范例：
+  ✗ "市场规模达到5000亿元。"（孤立数据，无意义）
+  ✓ "中国功效护肤品市场在2024年突破5000亿元大关，较三年前几乎翻番。这一增速远超同期大盘个位数增长，折射出消费者正在从'感性种草'向'理性选择'的根本性转变。"
+
+## 3. 禁止清单式写作（最重要的红线）
+- 严禁出现"首先...其次...再次...最后..."的机械排列
+- 严禁通篇无序列表/有序列表代替段落论述
+- 允许在必要时使用极短列表（3项以内）辅助说明，但列表前后必须有段落论述包裹
+- 每章至少 80% 内容必须是完整的叙述段落
+
+## 4. 语言风格：专业而不呆板
+- 避免AI感重的词汇：「赋能」「助力」「打造」「引领」「新质生产力」等空洞套话
+- 用具体动词替代万能动词：不说"推动增长"，说"拉高客单价至XXX元"
+- 允许使用生动的商业比喻和类比，但不过度文学化
+- 敢于给出有锐度的判断，不做"正确的废话"
+
+## 5. 篇幅与密度
+- 每章正文 1000-1500 字（不含标题和占位符标签）
+- 每 200 字至少出现 1 个具体数据点或案例细节
+- 禁止开场白（"在当今时代..."）和总结段（"综上所述..."），直接从第一个论点切入
+
+## 6. 标题编号格式（必须严格遵守）
+- 一级章节标题格式：## 一、标题内容 / ## 二、标题内容（中文数字编号由系统传入）
+- 二级小节标题格式：### 1. 标题内容 / ### 2. 标题内容
+- 三级子标题格式：#### （1）标题内容 / #### （2）标题内容
+- 各级标题必须单独成行，不与正文混排
+
+## 7. 段落格式
+- 正文每一自然段必须是完整书面段落表达
+- 严禁使用项目符号（- / * / •）代替主体论述段落
+- 允许的例外：极短辅助说明（3项以内）可使用列表，但前后必须有段落论述
+
+## 8. 占位符规范
+- 图表占位：在最能支撑核心数据论证的位置插入，格式 `[CHART_PLACEHOLDER]`
+- 配图占位：在场景描述或案例论述后插入，格式 `[IMAGE_PLACEHOLDER]`
+
+## 9. 绝对禁止（违反则输出作废）
+- 禁止输出任何括号包裹的建议、备注、说明性文字，如：
+  ✗ （图表建议：可展示...）
+  ✗ （配图建议：...）
+  ✗ （注：...）
+  ✗ *（建议...）*
+- 禁止输出写作自检清单、TODO、编辑批注
+- 禁止对图表/配图的内容做文字说明或建议，占位符标签本身就是全部，不需要任何补充文字
+- 输出必须是纯粹的、可直接发表的正文，不含任何指导性或元层级的文字"""
 
 AGENT2_USER = """白皮书标题：《{title}》
 语调基调：{tone}
-目标读者：美博会参展品牌决策层、渠道商、投资机构
+目标读者：{target_audience}
 
 请撰写第 {chapter_id} 章：【{chapter_title}】
+
 核心命题：{core_proposition}
-撰写指令：{guidelines}
+本章导语方向：{chapter_intro}
+与上一章的承接：{transition}
+撰稿 brief：{guidelines}
+
+二级小节结构：
+{sub_sections_text}
+
+数据锚点（必须在正文中引用）：
+{data_anchors_text}
+
+案例方向：{case_direction}
+
+本章需总结为：{chapter_summary}
 
 图表占位：{chart_placeholder_instruction}
 配图占位：{image_placeholder_instruction}
 
-请用 ## 开头，直接输出本章正文："""
+写作检查清单（请在输出前自检，但不要输出清单本身）：
+- [ ] 开篇是一个有冲击力的现象/数据/判断，而非"随着...的发展"
+- [ ] 没有连续超过3个无序列表项
+- [ ] 每个数据都有对比基准和解读
+- [ ] 段落之间有逻辑过渡而非机械编号
+- [ ] 没有使用「赋能」「助力」「打造」等空洞词汇
+- [ ] 字数达到 1000 字以上
+- [ ] 没有任何括号建议/备注/说明性文字（如"图表建议：..."、"配图建议：..."、"注：..."）
+- [ ] 输出是纯正文，不含任何元层级评论
+- [ ] 二级小节按照给定结构展开，使用 ### 1. / ### 2. 格式
+- [ ] 章节末尾有简短结论，自然引出下一章
+
+输出格式要求：
+- 第一行必须是：## {chapter_number}、{chapter_title}
+- 二级小节按给定结构展开，标题格式：### 1. 小节标题 / ### 2. 小节标题
+- 三级子标题格式：#### （1）子标题
+- 章节末尾用一小段结论收束（不超过3句，不用"综上所述"开头）
+- 只输出正文，不要输出自检清单或任何元注释
+
+请立即输出："""
 
 # ========================
 # 角色三：视觉叙事导演
 # ========================
-AGENT3_SYSTEM = """# Role: 高端美业商业视觉导演
+AGENT3_SYSTEM = """# Role: 高端商业视觉导演
 
 你深度理解「豆包·星绘」文生图模型的底层逻辑，
-专注于将美业商业白皮书中的抽象场景意图，
+专注于将商业白皮书中的抽象场景意图，
 转化为能被模型精准还原的、具备电影质感的真实摄影指令。
 你的每一条 Prompt，都像在向一位顶级商业摄影师下达拍摄简报。
 
@@ -372,7 +533,7 @@ AGENT3_SYSTEM = """# Role: 高端美业商业视觉导演
    - 「渠道变革」→ 「直播间美妆达人打光下的护肤品陈列，暖光氛围」
 3. 必须包含的画质词：真实感，高端商业产品级摄影，浅景深，精准布光，8K 分辨率，电影级色调。
 4. 绝对禁止画面出现：文字、字母、数字、图表坐标轴、按钮、任何 UI 元素。
-5. 美业专属美学：画面必须传递出「高端、洁净、专业、值得信赖」的品牌质感。"""
+5. 画面必须传递出「高端、洁净、专业、值得信赖」的品牌质感。"""
 
 AGENT3_USER = """请将以下场景描述转化为豆包星绘能理解的高品质摄影提示词。
 
@@ -384,7 +545,7 @@ AGENT3_USER = """请将以下场景描述转化为豆包星绘能理解的高品
 # ========================
 # 角色四：图表数据官
 # ========================
-AGENT4_SYSTEM = """# Role: CIBE 白皮书数据可视化官
+AGENT4_SYSTEM = """# Role: 数据可视化官
 
 你是一位同时精通数据分析与 ECharts 图表配置的专家。
 你只做一件事：从已完成的白皮书章节正文中，
@@ -431,7 +592,7 @@ AGENT4_USER = """白皮书标题：《{title}》
 # 工具函数
 # ---------------------------------------------------------------------------
 def _parse_llm_json(raw: str) -> dict:
-    """从 LLM 输出中健壮地提取 JSON"""
+    """从 LLM 输出中健壮地提取 JSON，自动修复常见问题"""
     clean = raw.strip()
     # 去掉 markdown 代码块
     if clean.startswith("```"):
@@ -439,14 +600,92 @@ def _parse_llm_json(raw: str) -> dict:
     if clean.endswith("```"):
         clean = clean.rsplit("```", 1)[0]
     clean = clean.strip()
+
+    # 第一次尝试：直接解析
     try:
         return json.loads(clean)
     except json.JSONDecodeError:
-        start = clean.find("{")
-        end = clean.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(clean[start:end])
-        raise
+        pass
+
+    # 第二次尝试：提取最外层 { ... }
+    start = clean.find("{")
+    end = clean.rfind("}") + 1
+    if start >= 0 and end > start:
+        fragment = clean[start:end]
+        try:
+            return json.loads(fragment)
+        except json.JSONDecodeError:
+            pass
+
+        # 第三次尝试：修复常见 LLM JSON 错误
+        fixed = fragment
+        # 修复尾部多余逗号 (trailing comma before } or ])
+        fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+        # 修复中文引号
+        fixed = fixed.replace('\u201c', '"').replace('\u201d', '"')
+        fixed = fixed.replace('\u2018', "'").replace('\u2019', "'")
+        # 修复未转义的换行符在字符串值内
+        fixed = re.sub(r'(?<=": ")(.*?)(?=")', lambda m: m.group(0).replace('\n', '\\n'), fixed)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+
+    # 第四次尝试：修复被截断的 JSON（补全缺失的括号）
+    candidate = clean[start:] if start >= 0 else clean
+    # 扫描：跟踪字符串状态和括号栈
+    in_str = False
+    last_safe = 0  # 最后一个结构完整的位置
+    stack = []     # 记录 { [ 的嵌套顺序
+    i = 0
+    while i < len(candidate):
+        ch = candidate[i]
+        if ch == '\\' and in_str:
+            i += 2
+            continue
+        if ch == '"':
+            in_str = not in_str
+            if not in_str:
+                last_safe = i + 1
+        elif not in_str:
+            if ch in ('{', '['):
+                stack.append('}' if ch == '{' else ']')
+                last_safe = i + 1
+            elif ch in ('}', ']'):
+                if stack:
+                    stack.pop()
+                last_safe = i + 1
+            else:
+                # 数字、布尔值、逗号、冒号等也是安全位置
+                last_safe = i + 1
+        i += 1
+    if in_str or stack:
+        # 回退到最后安全位置，然后补全
+        candidate = candidate[:last_safe]
+        candidate = re.sub(r',\s*$', '', candidate)
+        candidate = re.sub(r',\s*"[^"]*"\s*:\s*$', '', candidate)
+        # 重新计算剩余未闭合括号
+        stack2 = []
+        in_str2 = False
+        for ch in candidate:
+            if ch == '"' and (not candidate or True):
+                in_str2 = not in_str2
+            elif not in_str2:
+                if ch in ('{', '['):
+                    stack2.append('}' if ch == '{' else ']')
+                elif ch in ('}', ']') and stack2:
+                    stack2.pop()
+        # 按嵌套逆序补全
+        candidate += ''.join(reversed(stack2))
+        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # 全部失败，抛出有用的错误信息
+    preview = clean[:200] + '...' if len(clean) > 200 else clean
+    raise ValueError(f"无法解析 LLM 返回的 JSON。前200字符: {preview}")
 
 
 # ---------------------------------------------------------------------------
@@ -455,24 +694,37 @@ def _parse_llm_json(raw: str) -> dict:
 def run_four_agent_pipeline(data_text: str) -> str:
     """
     Agent1(战略官) → [Agent2(主笔) + Agent3(视觉导演)] 并发
-    → Agent4(图表数据官) 并发 → 三路合并 → 完整 Markdown
+    → Agent4(图表数据官) 并发 → 合并完整白皮书 Markdown
+    新版：支持 front_matter / back_matter / sub_sections 等完整白皮书体例
     """
     llm = get_llm_provider()
 
-    # ===== 第一批：战略官 生成大纲（串行）=====
+    # ===== 第一批：战略官 生成大纲（串行，带重试）=====
     print("[Pipeline] 第一批：战略官生成大纲...")
-    outline_raw = llm.generate(
-        prompt=AGENT1_USER.format(data=data_text),
-        system=AGENT1_SYSTEM,
-    )
-    outline = _parse_llm_json(outline_raw)
+    outline = None
+    for attempt in range(3):
+        try:
+            outline_raw = llm.generate(
+                prompt=AGENT1_USER.format(data=data_text),
+                system=AGENT1_SYSTEM,
+            )
+            outline = _parse_llm_json(outline_raw)
+            break
+        except Exception as e:
+            print(f"[Pipeline] 战略官第 {attempt+1} 次尝试失败: {e}")
+            if attempt == 2:
+                raise ValueError(f"战略官连续 3 次生成大纲失败: {e}")
     meta = outline.get("whitepaper_meta", {})
+    front_matter = outline.get("front_matter", {})
+    back_matter = outline.get("back_matter", {})
     chapters = outline.get("chapters", [])
     if not chapters:
         raise ValueError("战略官未生成任何章节")
 
     title = meta.get("title", "CIBE 美业数据洞察白皮书")
+    subtitle = meta.get("subtitle", "")
     tone = meta.get("global_tone", "专业、数据驱动")
+    target_audience = meta.get("target_audience", "行业决策层、渠道商、投资机构")
     print(f"[Pipeline] 大纲完成：{title}，共 {len(chapters)} 章")
 
     # ===== 第二批：主笔 + 视觉导演（并发）=====
@@ -480,26 +732,49 @@ def run_four_agent_pipeline(data_text: str) -> str:
     chapter_texts = {}   # chapter_id → markdown
     image_prompts = {}   # chapter_id → 摄影提示词
 
-    def _write_chapter(ch):
+    def _write_chapter(ch, ch_idx):
+        CN_NUMS = "一二三四五六七八九十"
+        ch_number = CN_NUMS[ch_idx - 1] if ch_idx <= 10 else str(ch_idx)
         ch_id = ch["chapter_id"]
         chart_instr = (
             f'在最合适的段落后插入：[CHART_PLACEHOLDER id="{ch_id}"]'
             if ch.get("needs_chart") else "（本章无需图表）"
         )
+        # image_intent 不为 none 就需要配图
+        img_intent = ch.get("image_intent", "none")
+        needs_img = bool(img_intent and img_intent.strip().lower() != "none")
         image_instr = (
-            f'在最合适的段落后插入：[IMAGE_PLACEHOLDER id="{ch_id}"]'
-            if ch.get("needs_image") else "（本章无需配图）"
+            f'在最合适的案例/场景段落后插入：[IMAGE_PLACEHOLDER id="{ch_id}"]'
+            if needs_img else "（本章无需配图）"
         )
+        # 构造二级小节文本
+        sub_sections = ch.get("sub_sections", [])
+        sub_text = "\n".join(
+            f"- {s.get('section_id','')}: {s.get('section_title','')} — {s.get('section_focus','')}"
+            for s in sub_sections
+        ) if sub_sections else "（由你自行组织二级结构）"
+        # 构造数据锚点文本
+        anchors = ch.get("data_anchors", [])
+        anchors_text = "\n".join(f"- {a}" for a in anchors) if anchors else "（从正文内容中自行提取关键数据）"
+
         md = llm.generate(
             prompt=AGENT2_USER.format(
                 title=title,
                 tone=tone,
+                target_audience=target_audience,
                 chapter_id=ch_id,
                 chapter_title=ch.get("chapter_title", ""),
                 core_proposition=ch.get("core_proposition", ""),
+                chapter_intro=ch.get("chapter_intro", ""),
+                transition=ch.get("transition_from_previous", ""),
                 guidelines=ch.get("content_guidelines", ""),
+                sub_sections_text=sub_text,
+                data_anchors_text=anchors_text,
+                case_direction=ch.get("case_direction", ""),
+                chapter_summary=ch.get("chapter_summary", ""),
                 chart_placeholder_instruction=chart_instr,
                 image_placeholder_instruction=image_instr,
+                chapter_number=ch_number,
             ),
             system=AGENT2_SYSTEM,
         )
@@ -517,11 +792,13 @@ def run_four_agent_pipeline(data_text: str) -> str:
         )
         return ("image", ch_id, prompt_text.strip().strip('"').strip("'"))
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         futures = []
-        for ch in chapters:
-            futures.append(pool.submit(_write_chapter, ch))
-            if ch.get("needs_image"):
+        for ch_idx, ch in enumerate(chapters, 1):
+            futures.append(pool.submit(_write_chapter, ch, ch_idx))
+            # image_intent 不为 none 就生成配图（不受 visual_type 限制）
+            img_intent = ch.get("image_intent", "none")
+            if img_intent and img_intent.strip().lower() != "none":
                 futures.append(pool.submit(_gen_image_prompt, ch))
 
         for fut in as_completed(futures):
@@ -556,7 +833,7 @@ def run_four_agent_pipeline(data_text: str) -> str:
         )
         return ("chart", ch_id, _parse_llm_json(raw))
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         chart_futures = []
         for ch in chapters:
             if ch.get("needs_chart"):
@@ -573,12 +850,86 @@ def run_four_agent_pipeline(data_text: str) -> str:
     print(f"[Pipeline] 第三批完成：{len(chart_data)} 个图表")
 
     # ===== 合并阶段 =====
-    print("[Pipeline] 合并三路输出...")
-    all_chapter_md = []
+    print("[Pipeline] 合并完整白皮书...")
 
+    # 清理正文中残留的括号建议/元注释
+    _meta_comment_re = re.compile(
+        r'[（(]\s*(?:图表建议|配图建议|建议|注|备注|说明|编辑批注|TODO)\s*[：:].+?[）)]\s*',
+        re.DOTALL,
+    )
+    _star_comment_re = re.compile(
+        r'\*\s*[（(]\s*(?:图表建议|配图建议|建议|注).+?[）)]\s*\*\s*',
+        re.DOTALL,
+    )
+
+    # --- 封面 ---
+    parts = []
+    header = f"# {title}\n"
+    if subtitle:
+        header += f"\n> {subtitle}\n"
+    parts.append(header)
+
+    # --- 执行摘要 ---
+    exec_summary = front_matter.get("executive_summary", {})
+    if exec_summary:
+        es_lines = ["## 执行摘要\n"]
+        # 总判断
+        judgement = exec_summary.get("executive_judgement", "")
+        if judgement:
+            es_lines.append(f"**核心判断：** {judgement}\n")
+        # 关键发现
+        findings = exec_summary.get("key_findings", [])
+        if findings:
+            es_lines.append("### 关键发现\n")
+            for i, f in enumerate(findings, 1):
+                es_lines.append(f"**{i}.** {f}\n")
+        # 核心数据结论
+        data_pts = exec_summary.get("core_data_points", [])
+        if data_pts:
+            es_lines.append("### 核心数据\n")
+            for d in data_pts:
+                es_lines.append(f"- {d}")
+        parts.append("\n".join(es_lines))
+
+    # --- 目录 ---
+    toc_lines = ["## 目录\n"]
+    toc_lines.append("- 执行摘要")
+    toc_lines.append("- 研究说明")
+    for i, ch in enumerate(chapters, 1):
+        ch_title = ch.get("chapter_title", f"第{i}章")
+        toc_lines.append(f"{i}. {ch_title}")
+        for s in ch.get("sub_sections", []):
+            toc_lines.append(f"   - {s.get('section_title', '')}")
+    toc_lines.append("- 结论与行动建议")
+    toc_lines.append("- 参考说明")
+    parts.append("\n".join(toc_lines))
+
+    # --- 研究说明 ---
+    research = front_matter.get("research_note", {})
+    if research:
+        rn_lines = ["## 研究说明\n"]
+        if research.get("research_object"):
+            rn_lines.append(f"**研究对象：** {research['research_object']}\n")
+        if research.get("time_scope"):
+            rn_lines.append(f"**时间范围：** {research['time_scope']}\n")
+        sources = research.get("data_sources", [])
+        if sources:
+            rn_lines.append(f"**数据来源：** {'、'.join(sources)}\n")
+        if research.get("sample_scope"):
+            rn_lines.append(f"**样本口径：** {research['sample_scope']}\n")
+        if research.get("method_boundary"):
+            rn_lines.append(f"**研究边界：** {research['method_boundary']}\n")
+        if research.get("term_definition"):
+            rn_lines.append(f"**名词定义：** {research['term_definition']}\n")
+        parts.append("\n".join(rn_lines))
+
+    # --- 正文章节 ---
     for ch in chapters:
         ch_id = ch.get("chapter_id", "")
         md = chapter_texts.get(ch_id, "")
+        # 清理元注释
+        md = _meta_comment_re.sub('', md)
+        md = _star_comment_re.sub('', md)
 
         # 替换 [CHART_PLACEHOLDER id="XX"]
         if ch_id in chart_data:
@@ -602,15 +953,59 @@ def run_four_agent_pipeline(data_text: str) -> str:
                 md,
             )
 
-        all_chapter_md.append(md)
+        parts.append(md)
 
-    # 拼合
-    subtitle = meta.get("subtitle", "")
-    header = f"# {title}\n"
-    if subtitle:
-        header += f"\n> {subtitle}\n"
+    # --- 结论与行动建议 ---
+    if back_matter:
+        conclusion = back_matter.get("conclusion_summary", {})
+        actions = back_matter.get("action_recommendations", {})
+        risks = back_matter.get("risk_and_boundary_notes", [])
 
-    full_markdown = header + "\n\n" + "\n\n---\n\n".join(all_chapter_md)
+        bm_lines = ["## 结论与行动建议\n"]
+        if conclusion.get("final_judgement"):
+            bm_lines.append(f"**总结性判断：** {conclusion['final_judgement']}\n")
+        implications = conclusion.get("industry_implications", [])
+        if implications:
+            bm_lines.append("### 行业启示\n")
+            for imp in implications:
+                bm_lines.append(f"- {imp}")
+            bm_lines.append("")
+
+        if actions:
+            if actions.get("for_brands"):
+                bm_lines.append("### 对品牌方的建议\n")
+                for a in actions["for_brands"]:
+                    bm_lines.append(f"- {a}")
+                bm_lines.append("")
+            if actions.get("for_channels"):
+                bm_lines.append("### 对渠道方的建议\n")
+                for a in actions["for_channels"]:
+                    bm_lines.append(f"- {a}")
+                bm_lines.append("")
+            if actions.get("for_investment_or_strategy"):
+                bm_lines.append("### 对投资/战略团队的建议\n")
+                for a in actions["for_investment_or_strategy"]:
+                    bm_lines.append(f"- {a}")
+                bm_lines.append("")
+
+        if risks:
+            bm_lines.append("### 风险与边界提示\n")
+            for r in risks:
+                bm_lines.append(f"- {r}")
+            bm_lines.append("")
+
+        parts.append("\n".join(bm_lines))
+
+    # --- 参考说明 ---
+    refs = back_matter.get("references_or_appendix", {})
+    if refs and refs.get("required"):
+        ref_lines = ["## 参考说明与附录\n"]
+        if refs.get("content_direction"):
+            ref_lines.append(f"{refs['content_direction']}\n")
+        parts.append("\n".join(ref_lines))
+
+    # --- 拼合 ---
+    full_markdown = "\n\n---\n\n".join(parts)
     print(f"[Pipeline] 白皮书生成完毕，总长度 {len(full_markdown)} 字符")
     return full_markdown
 
@@ -637,26 +1032,31 @@ async def health_check():
 
 @app.post("/api/generate")
 async def generate_whitepaper(
-    file: Optional[UploadFile] = File(None),
+    files: List[UploadFile] = File([]),
     text: Optional[str] = Form(None),
 ):
     """
     主接口：四角色管线 — 战略官 → 主笔+视觉导演 → 图表数据官
+    支持同时上传多个文件 + 可选文字输入
     """
-    # 1. 获取数据
-    data_text = ""
-    if file and file.filename:
-        content = await file.read()
+    # 1. 获取数据（多文件 + 文字拼合）
+    data_parts = []
+    for f in files:
+        if not f.filename:
+            continue
+        content = await f.read()
         if not content:
-            raise HTTPException(status_code=400, detail="上传文件为空")
+            raise HTTPException(status_code=400, detail=f"文件 {f.filename} 为空")
         try:
-            data_text = FileParser.parse(file.filename, content)
+            parsed = FileParser.parse(f.filename, content)
+            data_parts.append(f"【文件: {f.filename}】\n{parsed}")
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    elif text and text.strip():
-        data_text = text.strip()
-    else:
+    if text and text.strip():
+        data_parts.append(f"【文字输入】\n{text.strip()}")
+    if not data_parts:
         raise HTTPException(status_code=400, detail="请上传文件或输入文字")
+    data_text = "\n\n---\n\n".join(data_parts)
 
     # 2. 截断过长内容
     MAX_CHARS = 15000
@@ -667,8 +1067,12 @@ async def generate_whitepaper(
     try:
         markdown = run_four_agent_pipeline(data_text)
     except (RuntimeError, ValueError) as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"AI 生成失败: {str(e)}")
 
     return {"status": "success", "markdown": markdown}

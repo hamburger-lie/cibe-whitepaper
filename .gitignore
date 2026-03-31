@@ -22,5 +22,11 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Test outputs
+test_output.md
+test_summary.txt
+test_*.txt
+test_*.md
+
 # Claude
 .claude/
