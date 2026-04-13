@@ -10,6 +10,7 @@ import json
 import time
 import base64
 import re
+import sqlite3
 from abc import ABC, abstractmethod
 from typing import Optional, List
 import threading
@@ -19,11 +20,13 @@ import pandas as pd
 import pdfplumber
 from docx import Document
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
+from passlib.hash import bcrypt
+import jwt
 import requests
 import uvicorn
 
@@ -34,10 +37,48 @@ load_dotenv()
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ARK_API_KEY = os.getenv("ARK_API_KEY", "")
+JWT_SECRET = os.getenv("JWT_SECRET", "cibe-whitepaper-secret-change-me-in-production")
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5678,http://127.0.0.1:5678").split(",")
 ]
+
+# ---------------------------------------------------------------------------
+# SQLite 用户数据库
+# ---------------------------------------------------------------------------
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.db")
+
+def _init_db():
+    """初始化用户表和生成日志表"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS generation_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            input_summary TEXT,
+            output_markdown TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_init_db()
+
+
+def _get_db():
+    """获取数据库连接"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # ---------------------------------------------------------------------------
 # FastAPI 应用
@@ -52,8 +93,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静态文件：让 index.html 可以直接通过 / 访问
-app.mount("/static", StaticFiles(directory="."), name="static")
+# 静态文件：仅暴露 public 目录，防止敏感文件（如 .env、users.db）被下载
+app.mount("/static", StaticFiles(directory="public"), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -336,13 +377,12 @@ AGENT1_USER = """基于以下原始数据，设计一份标准行业白皮书的
 {{
   "whitepaper_meta": {{
     "title": "白皮书完整标题（结论导向，不超过25字）",
-    "subtitle": "副标题，15字以内",
     "global_tone": "如：深度洞察、数据叙事、决策参考级",
     "target_audience": "目标读者，如：品牌方高层、渠道决策层、投资与战略团队"
   }},
   "document_spec": {{
     "document_type": "标准行业白皮书",
-    "narrative_logic": "本书的总体递进逻辑概述",
+    #"narrative_logic": "本书的总体递进逻辑概述",
     "required_sections": ["封面页","执行摘要","目录页","研究说明/数据口径","正文章节","结论与行动建议","参考说明/附录"],
     "visual_rule": "图表优先，图片从属，避免画册化",
     "writing_rule": "偏研究报告体，不写成营销长文"
@@ -1011,13 +1051,44 @@ def run_four_agent_pipeline(data_text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 鉴权工具
+# ---------------------------------------------------------------------------
+
+def _create_token(username: str) -> str:
+    """签发 JWT"""
+    payload = {
+        "sub": username,
+        "exp": int(time.time()) + JWT_EXPIRE_HOURS * 3600,
+        "iat": int(time.time()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+async def verify_token(authorization: Optional[str] = Header(None)) -> str:
+    """
+    从 Authorization: Bearer <token> 中验证 JWT，
+    返回用户名；失败则抛 401。
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未登录或 Token 缺失")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token 已过期，请重新登录")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token 无效")
+
+
+# ---------------------------------------------------------------------------
 # API 路由
 # ---------------------------------------------------------------------------
 
 @app.get("/")
 async def serve_index():
     """提供前端页面"""
-    return FileResponse("index.html")
+    return FileResponse("public/index.html")
 
 
 @app.get("/api/health")
@@ -1030,10 +1101,44 @@ async def health_check():
     }
 
 
+@app.post("/api/register")
+async def register(username: str = Form(...), password: str = Form(...)):
+    """用户注册：bcrypt 哈希存储密码"""
+    if len(username) < 2 or len(username) > 32:
+        raise HTTPException(status_code=400, detail="用户名需 2-32 个字符")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少 6 个字符")
+    password_hash = bcrypt.hash(password)
+    conn = _get_db()
+    try:
+        conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                      (username, password_hash))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="用户名已存在")
+    finally:
+        conn.close()
+    token = _create_token(username)
+    return {"status": "success", "token": token, "username": username}
+
+
+@app.post("/api/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    """用户登录：验证密码并签发 JWT"""
+    conn = _get_db()
+    row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    if not row or not bcrypt.verify(password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    token = _create_token(username)
+    return {"status": "success", "token": token, "username": username}
+
+
 @app.post("/api/generate")
 async def generate_whitepaper(
     files: List[UploadFile] = File([]),
     text: Optional[str] = Form(None),
+    _user: str = Depends(verify_token),
 ):
     """
     主接口：四角色管线 — 战略官 → 主笔+视觉导演 → 图表数据官
@@ -1041,6 +1146,7 @@ async def generate_whitepaper(
     """
     # 1. 获取数据（多文件 + 文字拼合）
     data_parts = []
+    file_names = []
     for f in files:
         if not f.filename:
             continue
@@ -1050,6 +1156,7 @@ async def generate_whitepaper(
         try:
             parsed = FileParser.parse(f.filename, content)
             data_parts.append(f"【文件: {f.filename}】\n{parsed}")
+            file_names.append(f.filename)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     if text and text.strip():
@@ -1057,6 +1164,14 @@ async def generate_whitepaper(
     if not data_parts:
         raise HTTPException(status_code=400, detail="请上传文件或输入文字")
     data_text = "\n\n---\n\n".join(data_parts)
+
+    # 构建输入摘要（用于审计日志）
+    input_summary_parts = []
+    if file_names:
+        input_summary_parts.append(f"文件: {', '.join(file_names)}")
+    if text and text.strip():
+        input_summary_parts.append(f"文本: {len(text.strip())}字")
+    input_summary = "; ".join(input_summary_parts) + f" (总计{len(data_text)}字符)"
 
     # 2. 截断过长内容
     MAX_CHARS = 15000
@@ -1075,6 +1190,18 @@ async def generate_whitepaper(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"AI 生成失败: {str(e)}")
 
+    # 4. 记录生成日志
+    try:
+        conn = _get_db()
+        conn.execute(
+            "INSERT INTO generation_logs (username, input_summary, output_markdown) VALUES (?, ?, ?)",
+            (_user, input_summary, markdown),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Audit] 日志写入失败: {e}")
+
     return {"status": "success", "markdown": markdown}
 
 
@@ -1083,6 +1210,7 @@ async def generate_image(
     prompt: str = Form(...),
     width: int = Form(768),
     height: int = Form(512),
+    _user: str = Depends(verify_token),
 ):
     """
     配图生成接口：前端解析到 <image> 标签后调用此接口
@@ -1109,6 +1237,73 @@ async def generate_image(
             "message": "图片生成失败，请稍后重试",
             "image_base64": None,
         }
+
+
+# ---------------------------------------------------------------------------
+# 管理员接口
+# ---------------------------------------------------------------------------
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "cibe-admin-change-me")
+
+
+async def verify_admin(authorization: Optional[str] = Header(None)):
+    """验证管理员 Token（Bearer admin-token 或普通用户 JWT 中 username=admin）"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    token = authorization.split(" ", 1)[1]
+    # 方式一：硬编码 admin token
+    if token == ADMIN_TOKEN:
+        return "admin"
+    # 方式二：JWT 中 username 为 admin
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        if payload.get("sub") == "admin":
+            return "admin"
+    except jwt.InvalidTokenError:
+        pass
+    raise HTTPException(status_code=403, detail="需要管理员权限")
+
+
+@app.get("/api/admin/stats")
+async def admin_stats(_admin: str = Depends(verify_admin)):
+    """管理员统计面板：用户数、生成次数、按用户分组统计"""
+    conn = _get_db()
+    total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_generations = conn.execute("SELECT COUNT(*) FROM generation_logs").fetchone()[0]
+    per_user = conn.execute("""
+        SELECT username, COUNT(*) as count, MAX(created_at) as last_at
+        FROM generation_logs GROUP BY username ORDER BY count DESC
+    """).fetchall()
+    recent_logs = conn.execute("""
+        SELECT id, username, created_at, input_summary
+        FROM generation_logs ORDER BY id DESC LIMIT 20
+    """).fetchall()
+    conn.close()
+    return {
+        "total_users": total_users,
+        "total_generations": total_generations,
+        "per_user": [{"username": r[0], "count": r[1], "last_at": r[2]} for r in per_user],
+        "recent_logs": [
+            {"id": r[0], "username": r[1], "created_at": r[2], "input_summary": r[3]}
+            for r in recent_logs
+        ],
+    }
+
+
+@app.get("/api/admin/logs/{log_id}")
+async def admin_get_log(log_id: int, _admin: str = Depends(verify_admin)):
+    """管理员查看某次生成的完整内容"""
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT id, username, created_at, input_summary, output_markdown FROM generation_logs WHERE id = ?",
+        (log_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {
+        "id": row[0], "username": row[1], "created_at": row[2],
+        "input_summary": row[3], "output_markdown": row[4],
+    }
 
 
 # ---------------------------------------------------------------------------

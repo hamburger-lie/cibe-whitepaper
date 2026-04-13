@@ -28,5 +28,8 @@ test_summary.txt
 test_*.txt
 test_*.md
 
+# SQLite 用户数据库
+users.db
+
 # Claude
 .claude/

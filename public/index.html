@@ -942,10 +942,172 @@ body {
 .toast.success {
   background: #28a745;
 }
+
+/* ============================================= */
+/* 登录/注册遮罩层                                 */
+/* ============================================= */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: linear-gradient(135deg, #1A1A2E 0%, #2D1B3D 50%, #1A1A2E 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s, visibility 0.4s;
+}
+.auth-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auth-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 48px 40px 36px;
+  width: 400px;
+  max-width: 92vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+.auth-card .logo-box {
+  width: 56px;
+  height: 56px;
+  background: var(--cibe-pink);
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.auth-card h2 {
+  font-size: 22px;
+  color: var(--cibe-dark);
+  margin-bottom: 6px;
+}
+
+.auth-card .auth-subtitle {
+  color: #999;
+  font-size: 14px;
+  margin-bottom: 28px;
+}
+
+.auth-card input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #E8E8E8;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 14px;
+}
+
+.auth-card input:focus {
+  border-color: var(--cibe-pink);
+}
+
+.auth-card .auth-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--cibe-pink);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin-top: 4px;
+}
+
+.auth-card .auth-btn:hover {
+  background: #C70045;
+}
+
+.auth-card .auth-btn:active {
+  transform: scale(0.98);
+}
+
+.auth-card .auth-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.auth-card .auth-switch {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #888;
+}
+
+.auth-card .auth-switch a {
+  color: var(--cibe-pink);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-card .auth-switch a:hover {
+  text-decoration: underline;
+}
+
+.auth-card .auth-error {
+  color: #E3004F;
+  font-size: 13px;
+  margin-top: 10px;
+  min-height: 20px;
+}
+
+.auth-user-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #666;
+}
+
+.auth-user-bar .username {
+  font-weight: 600;
+  color: var(--cibe-dark);
+}
+
+.auth-user-bar .logout-btn {
+  color: var(--cibe-pink);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 13px;
+}
+
+.auth-user-bar .logout-btn:hover {
+  text-decoration: underline;
+}
 </style>
 </head>
 
 <body>
+
+<!-- ========== 登录/注册遮罩层 ========== -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="logo-box">C</div>
+    <h2 id="authTitle">登录</h2>
+    <p class="auth-subtitle" id="authSubtitle">CIBE 美业数据白皮书生成系统</p>
+    <form id="authForm" onsubmit="handleAuth(event)">
+      <input type="text" id="authUsername" placeholder="用户名" autocomplete="username" required>
+      <input type="password" id="authPassword" placeholder="密码（至少6位）" autocomplete="current-password" required minlength="6">
+      <button type="submit" class="auth-btn" id="authBtn">登录</button>
+    </form>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-switch" style="color:#aaa;font-size:13px;">账号由管理员分配，如需开通请联系管理员</div>
+  </div>
+</div>
 
 <!-- ========== 顶部导航 ========== -->
 <nav class="navbar">
@@ -953,7 +1115,13 @@ body {
     <div class="logo-box">C</div>
     <h1>CIBE <span>美业数据白皮书</span>生成系统</h1>
   </div>
-  <div class="navbar-status" id="navStatus">AI 就绪</div>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div class="auth-user-bar" id="userBar" style="display:none;">
+      <span class="username" id="displayUsername"></span>
+      <button class="logout-btn" onclick="handleLogout()">退出登录</button>
+    </div>
+    <div class="navbar-status" id="navStatus">AI 就绪</div>
+  </div>
 </nav>
 
 <!-- ========== 主内容 ========== -->
@@ -1161,6 +1329,98 @@ const MAX_FILES = 10;
 const API_BASE = window.location.origin;
 
 // =============================================================
+// 鉴权系统
+// =============================================================
+let isLoginMode = true; // true=登录, false=注册
+
+function getToken() {
+  return localStorage.getItem('cibe_token');
+}
+
+function getUsername() {
+  return localStorage.getItem('cibe_username');
+}
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+function showAuthOverlay() {
+  document.getElementById('authOverlay').classList.remove('hidden');
+  document.getElementById('userBar').style.display = 'none';
+}
+
+function hideAuthOverlay() {
+  document.getElementById('authOverlay').classList.add('hidden');
+  const username = getUsername();
+  if (username) {
+    document.getElementById('displayUsername').textContent = username;
+    document.getElementById('userBar').style.display = 'flex';
+  }
+}
+
+// 公开注册已关闭，仅管理员可通过 create_user.py 创建账号
+
+async function handleAuth(e) {
+  e.preventDefault();
+  const btn = document.getElementById('authBtn');
+  const errEl = document.getElementById('authError');
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value;
+
+  if (!username || !password) { errEl.textContent = '请填写用户名和密码'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '请稍候...';
+  errEl.textContent = '';
+
+  const endpoint = '/api/login';
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('password', password);
+
+  try {
+    const resp = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', body: formData });
+    const data = await resp.json();
+    if (!resp.ok) {
+      errEl.textContent = data.detail || '操作失败';
+      return;
+    }
+    localStorage.setItem('cibe_token', data.token);
+    localStorage.setItem('cibe_username', data.username);
+    hideAuthOverlay();
+  } catch (err) {
+    errEl.textContent = '网络错误，请重试';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isLoginMode ? '登录' : '注册';
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('cibe_token');
+  localStorage.removeItem('cibe_username');
+  showAuthOverlay();
+}
+
+function handle401() {
+  localStorage.removeItem('cibe_token');
+  localStorage.removeItem('cibe_username');
+  showAuthOverlay();
+  showToast('登录已过期，请重新登录', 'error');
+}
+
+// 页面加载时检查登录状态
+(function checkAuth() {
+  if (getToken()) {
+    hideAuthOverlay();
+  } else {
+    showAuthOverlay();
+  }
+})();
+
+// =============================================================
 // Tab 切换
 // =============================================================
 function switchTab(tab) {
@@ -1275,8 +1535,11 @@ async function generateWhitepaper() {
 
     const resp = await fetch(`${API_BASE}/api/generate`, {
       method: 'POST',
+      headers: authHeaders(),
       body: formData,
     });
+
+    if (resp.status === 401) { handle401(); return; }
 
     updateProgress(60, '正在生成白皮书内容...');
 
@@ -1523,8 +1786,11 @@ async function generateAndFillImage(containerId, prompt) {
 
     const resp = await fetch(`${API_BASE}/api/generate-image`, {
       method: 'POST',
+      headers: authHeaders(),
       body: formData,
     });
+
+    if (resp.status === 401) { handle401(); return; }
 
     const result = await resp.json();
 
