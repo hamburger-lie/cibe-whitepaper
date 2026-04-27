@@ -1,0 +1,3327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIBE 美业数据白皮书生成系统</title>
+
+<!-- CDN 依赖 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1/dist/html2canvas.min.js"></script>
+
+<style>
+/* ============================================= */
+/* CSS 变量 & 全局                                */
+/* ============================================= */
+:root {
+  --cibe-pink: #E3004F;
+  --cibe-pink-light: #FF6B9D;
+  --cibe-pink-bg: #FFF0F5;
+  --cibe-dark: #1A1A2E;
+  --cibe-gray: #2D3748;
+  --bg: #F8F9FA;
+  --white: #FFFFFF;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --a4-width: 794px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--cibe-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ============================================= */
+/* 顶部导航                                       */
+/* ============================================= */
+.navbar {
+  background: var(--white);
+  border-bottom: 3px solid var(--cibe-pink);
+  padding: 0 40px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-box {
+  width: 120px;
+  height: 46px;
+  background: white;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.navbar h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cibe-dark);
+}
+
+.navbar h1 span {
+  color: var(--cibe-pink);
+}
+
+.navbar-status {
+  font-size: 13px;
+  color: #999;
+}
+
+/* ============================================= */
+/* 主内容区                                       */
+/* ============================================= */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ============================================= */
+/* 上传区                                         */
+/* ============================================= */
+.upload-section {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.upload-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.upload-tab {
+  flex: 1;
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.upload-tab.active {
+  color: var(--cibe-pink);
+  border-bottom-color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+
+.upload-tab:hover:not(.active) {
+  background: #f9f9f9;
+}
+
+.upload-panel {
+  padding: 32px;
+  display: none;
+}
+
+.upload-panel.active {
+  display: block;
+}
+
+/* 文件上传拖拽区 */
+.dropzone {
+  border: 2px dashed #ddd;
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+
+.dropzone-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.dropzone-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.dropzone-hint {
+  font-size: 13px;
+  color: #999;
+}
+
+.file-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-list:empty {
+  display: none;
+}
+
+.file-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+}
+
+.file-list-item .file-item-icon {
+  font-size: 18px;
+}
+
+.file-list-item .file-item-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list-item .file-item-size {
+  font-size: 12px;
+  color: #999;
+}
+
+.file-list-item .file-item-remove {
+  cursor: pointer;
+  color: #999;
+  font-size: 18px;
+  transition: color 0.15s;
+}
+
+.file-list-item .file-item-remove:hover {
+  color: var(--cibe-pink);
+}
+
+/* 文字粘贴区 */
+.text-input {
+  width: 100%;
+  min-height: 200px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+}
+
+/* ============================================= */
+/* 生成按钮 & 进度                                 */
+/* ============================================= */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.btn {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--cibe-pink);
+  color: white;
+  flex: 1;
+  justify-content: center;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #c70045;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(227,0,79,0.3);
+}
+
+.btn-secondary {
+  background: var(--cibe-gray);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #1a202c;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--cibe-pink);
+  border: 2px solid var(--cibe-pink);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--cibe-pink-bg);
+}
+
+/* 进度条 */
+.progress-section {
+  display: none;
+  margin-bottom: 24px;
+}
+
+.progress-section.show {
+  display: block;
+}
+
+.progress-bar-wrapper {
+  background: #e9ecef;
+  border-radius: 20px;
+  overflow: hidden;
+  height: 8px;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cibe-pink), var(--cibe-pink-light));
+  border-radius: 20px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+}
+
+.progress-log {
+  display: none;
+  margin-top: 14px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid #f3c5d8;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff8fb 0%, #ffffff 100%);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #3b3340;
+  text-align: left;
+}
+
+.progress-log.show {
+  display: block;
+}
+
+.progress-log-line {
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(226, 0, 91, 0.12);
+  word-break: break-all;
+}
+
+.progress-log-line:last-child {
+  border-bottom: none;
+}
+
+/* ============================================= */
+/* 操作栏                                         */
+/* ============================================= */
+.toolbar {
+  display: none;
+  gap: 12px;
+  margin-bottom: 24px;
+  justify-content: flex-end;
+}
+
+.toolbar.show {
+  display: flex;
+}
+
+/* ============================================= */
+/* 白皮书预览区                                    */
+/* ============================================= */
+.preview-section {
+  display: none;
+}
+
+.preview-section.show {
+  display: block;
+}
+
+/* 缩放容器 */
+.preview-scaler {
+  max-width: var(--a4-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.preview-card {
+  background: var(--white);
+  width: 100%;
+  max-width: var(--a4-width);
+  margin: 0 auto;
+  box-shadow: var(--shadow-lg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* 封面页 */
+.cover-page {
+  padding: 80px 60px;
+  min-height: 500px;
+  background: linear-gradient(135deg, var(--cibe-pink) 0%, #a0003a 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cover-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  margin-bottom: 32px;
+  backdrop-filter: blur(4px);
+  width: fit-content;
+}
+
+.cover-title {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-bottom: 24px;
+}
+
+.cover-subtitle {
+  font-size: 16px;
+  opacity: 0.85;
+  line-height: 1.8;
+}
+
+.cover-footer {
+  margin-top: 60px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* 正文区 */
+.content-body {
+  padding: 60px;
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--cibe-dark);
+}
+
+.content-body h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cibe-pink);
+  margin: 40px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--cibe-pink-bg);
+}
+
+.content-body h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 28px 0 12px;
+  color: var(--cibe-gray);
+}
+
+.content-body p {
+  margin: 12px 0;
+  text-align: justify;
+}
+
+.content-body ul, .content-body ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.content-body li {
+  margin: 6px 0;
+}
+
+.content-body strong {
+  color: var(--cibe-pink);
+}
+
+.content-body blockquote {
+  border-left: 4px solid var(--cibe-pink);
+  padding: 12px 20px;
+  margin: 16px 0;
+  background: var(--cibe-pink-bg);
+  border-radius: 0 8px 8px 0;
+}
+
+.content-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+.content-body th {
+  background: var(--cibe-pink);
+  color: white;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.content-body td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.content-body tr:hover td {
+  background: #fafafa;
+}
+
+/* 图表容器 */
+.chart-container {
+  width: 100%;
+  height: 380px;
+  margin: 24px 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 配图容器 */
+.image-container {
+  width: 100%;
+  margin: 24px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  text-align: center;
+  background: #fafafa;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-container img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.image-placeholder {
+  padding: 40px;
+  color: #999;
+  font-size: 13px;
+  text-align: center;
+}
+
+.image-loading {
+  padding: 40px;
+  color: var(--cibe-pink);
+  font-size: 13px;
+}
+
+/* ============================================= */
+/* 编辑模式                                       */
+/* ============================================= */
+.edit-mode [contenteditable="true"] {
+  outline: 1px dashed rgba(227, 0, 79, 0.25);
+  outline-offset: 2px;
+  min-height: 1em;
+  border-radius: 3px;
+  transition: outline 0.15s, background 0.15s;
+}
+
+.edit-mode [contenteditable="true"]:hover {
+  outline-color: rgba(227, 0, 79, 0.45);
+}
+
+.edit-mode [contenteditable="true"]:focus {
+  outline: 2px solid var(--cibe-pink);
+  background: rgba(255, 240, 245, 0.3);
+}
+
+.edit-mode .cover-page [contenteditable="true"] {
+  outline-color: rgba(255, 255, 255, 0.3);
+}
+
+.edit-mode .cover-page [contenteditable="true"]:hover {
+  outline-color: rgba(255, 255, 255, 0.5);
+}
+
+.edit-mode .cover-page [contenteditable="true"]:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 编辑态 — 图表/配图操作浮层 */
+.edit-mode .chart-container,
+.edit-mode .image-container {
+  position: relative;
+}
+
+.edit-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+}
+
+.edit-overlay-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: transform 0.15s;
+  opacity: 0.85;
+}
+
+.edit-overlay-btn:hover {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.edit-overlay-btn.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.edit-overlay-btn.edit-chart {
+  background: var(--cibe-pink);
+  color: white;
+}
+
+/* 图表编辑弹窗 — 全功能可视化编辑器 */
+.chart-edit-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-edit-panel {
+  background: white;
+  border-radius: var(--radius);
+  width: 960px;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.ce-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+}
+.ce-header h3 {
+  font-size: 17px;
+  color: var(--cibe-dark);
+  margin: 0;
+}
+.ce-header-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.ce-header-close:hover { background: #f0f0f0; color: #333; }
+
+.ce-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 左侧控制面板 */
+.ce-controls {
+  width: 400px;
+  min-width: 360px;
+  overflow-y: auto;
+  padding: 20px 24px;
+  border-right: 1px solid #eee;
+}
+
+.ce-section {
+  margin-bottom: 20px;
+}
+.ce-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cibe-pink);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ce-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.ce-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.ce-row input, .ce-row select {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.ce-row input:focus, .ce-row select:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+}
+.ce-row input[type="color"] {
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  cursor: pointer;
+  flex: none;
+}
+.ce-row input[type="number"] {
+  width: 72px;
+  flex: none;
+}
+.ce-row input[type="range"] {
+  flex: 1;
+}
+
+/* 数据表格 */
+.ce-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.ce-data-table th {
+  background: #f8f9fa;
+  padding: 6px 8px;
+  font-weight: 600;
+  color: #555;
+  border: 1px solid #e0e0e0;
+  font-size: 12px;
+}
+.ce-data-table td {
+  padding: 2px;
+  border: 1px solid #e0e0e0;
+}
+.ce-data-table input {
+  width: 100%;
+  border: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: transparent;
+  text-align: center;
+}
+.ce-data-table input:focus {
+  outline: none;
+  background: #fff8f0;
+}
+.ce-data-table input.ce-label-input {
+  text-align: left;
+  font-weight: 500;
+}
+.ce-data-table .ce-series-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ce-data-table .ce-series-name input {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ce-table-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.ce-mini-btn {
+  padding: 5px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.15s;
+}
+.ce-mini-btn:hover {
+  border-color: var(--cibe-pink);
+  color: var(--cibe-pink);
+  background: var(--cibe-pink-bg);
+}
+.ce-mini-btn.danger:hover {
+  border-color: #dc3545;
+  color: #dc3545;
+  background: #fff5f5;
+}
+
+/* 颜色列表 */
+.ce-color-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ce-color-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* 右侧预览 */
+.ce-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  padding: 20px;
+  min-width: 300px;
+}
+.ce-preview-title {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.ce-preview-chart {
+  width: 100%;
+  height: 360px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+/* 底部操作栏 */
+.ce-footer {
+  display: flex;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid #eee;
+  justify-content: flex-end;
+}
+
+.ce-error {
+  color: #dc3545;
+  font-size: 12px;
+  padding: 0 24px 8px;
+  min-height: 0;
+}
+
+/* 编辑模式按钮高亮态 */
+.btn-edit-active {
+  background: var(--cibe-pink) !important;
+  color: white !important;
+  border-color: var(--cibe-pink) !important;
+}
+
+/* 正文段落首行缩进 */
+#contentBody p {
+  text-indent: 2em;
+}
+
+/* 一级标题（h2）分页与视觉分隔 */
+#contentBody h2 {
+  page-break-before: always;
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 2px solid #eee;
+}
+#contentBody h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ============================================= */
+/* 响应式                                         */
+/* ============================================= */
+@media (max-width: 860px) {
+  .container { padding: 20px 12px 60px; }
+  .cover-page { padding: 40px 30px; }
+  .content-body { padding: 30px; }
+  .cover-title { font-size: 26px; }
+}
+
+/* ============================================= */
+/* 打印样式                                       */
+/* ============================================= */
+@media print {
+  .navbar, .upload-section, .action-bar, .progress-section, .toolbar { display: none !important; }
+  .preview-card { box-shadow: none; }
+}
+
+/* ============================================= */
+/* 动画                                           */
+/* ============================================= */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ============================================= */
+/* Toast 通知                                     */
+/* ============================================= */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 14px 24px;
+  background: var(--cibe-dark);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.error {
+  background: #dc3545;
+}
+
+.toast.success {
+  background: #28a745;
+}
+
+/* ============================================= */
+/* 验证和反射功能区                                 */
+/* ============================================= */
+.verification-reflection-section {
+  display: none;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+  padding: 24px;
+}
+
+.verification-reflection-section.show {
+  display: block;
+}
+
+.verification-panel, .reflection-panel {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.verification-panel:last-child, .reflection-panel:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.verification-panel h3, .reflection-panel h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cibe-dark);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #f8f9fa;
+  color: #666;
+}
+
+.status-indicator.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-indicator.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-indicator.processing {
+  background: #d1ecf1;
+  color: #0c5460;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.verification-results, .reflection-results {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid var(--cibe-pink);
+}
+
+.verification-results h4, .reflection-results h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cibe-dark);
+  margin-bottom: 12px;
+}
+
+.verification-item, .reflection-item {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+.verification-item:last-child, .reflection-item:last-child {
+  margin-bottom: 0;
+}
+
+.verification-item-title, .reflection-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cibe-dark);
+  margin-bottom: 6px;
+}
+
+.verification-item-description, .reflection-item-description {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.verification-item-confidence, .reflection-item-confidence {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.confidence-high {
+  background: #d4edda;
+  color: #155724;
+}
+
+.confidence-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.confidence-low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.verification-actions, .reflection-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.verification-actions .btn, .reflection-actions .btn {
+  flex: 1;
+  justify-content: center;
+  padding: 10px 20px;
+  font-size: 13px;
+}
+
+/* 验证详情展开 */
+.verification-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+  color: #666;
+  display: none;
+}
+
+.verification-details.show {
+  display: block;
+}
+
+.details-toggle {
+  color: var(--cibe-pink);
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 6px;
+  display: inline-block;
+}
+
+.details-toggle:hover {
+  text-decoration: underline;
+}
+
+/* 反思分析标签 */
+.reflection-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.reflection-tag {
+  padding: 4px 12px;
+  background: var(--cibe-pink-bg);
+  color: var(--cibe-pink);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reflection-suggestions {
+  margin-top: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.reflection-suggestions h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cibe-dark);
+  margin-bottom: 8px;
+}
+
+.reflection-suggestion-item {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  padding-left: 16px;
+  position: relative;
+}
+
+.reflection-suggestion-item:before {
+  content: "💡";
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* ============================================= */
+/* 登录遮罩                                       */
+/* ============================================= */
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(227, 0, 79, 0.12), transparent 28%),
+    linear-gradient(135deg, #fff7fa 0%, #ffffff 45%, #f8f9fa 100%);
+}
+
+.auth-screen.show {
+  display: flex;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  padding: 34px;
+  background: rgba(255,255,255,0.94);
+  border: 1px solid rgba(227,0,79,0.16);
+  border-radius: 22px;
+  box-shadow: 0 24px 80px rgba(26,26,46,0.16);
+}
+
+.auth-logo {
+  width: 150px;
+  height: 58px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 18px;
+}
+
+.auth-card h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: var(--cibe-dark);
+}
+
+.auth-card p {
+  font-size: 13px;
+  color: #667085;
+  margin-bottom: 22px;
+}
+
+.auth-field {
+  margin-bottom: 14px;
+}
+
+.auth-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cibe-gray);
+  margin-bottom: 7px;
+}
+
+.auth-field input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 0 13px;
+  font-size: 15px;
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+  box-shadow: 0 0 0 3px rgba(227,0,79,0.08);
+}
+
+.auth-error {
+  min-height: 20px;
+  margin: 4px 0 12px;
+  color: #dc3545;
+  font-size: 13px;
+}
+
+.logout-btn {
+  margin-left: 12px;
+  border: 1px solid #eee;
+  background: white;
+  color: #667085;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.logout-btn:hover {
+  color: var(--cibe-pink);
+  border-color: var(--cibe-pink);
+}
+
+.current-user {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #667085;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff5f9;
+  border: 1px solid rgba(227, 0, 79, 0.12);
+  display: none;
+}
+
+.secondary-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.account-panel {
+  display: none;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+
+.account-panel.show {
+  display: block;
+}
+
+.account-panel h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.account-panel p {
+  color: #667085;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.mini-form {
+  padding: 16px;
+  border: 1px solid #f0d7e1;
+  border-radius: 12px;
+  background: #fff9fb;
+}
+
+.mini-form h4 {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+.mini-form input,
+.mini-form select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.mini-form input:focus,
+.mini-form select:focus {
+  outline: none;
+  border-color: var(--cibe-pink);
+}
+
+.history-list,
+.user-list,
+.credential-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item,
+.user-item,
+.credential-item {
+  border: 1px solid #f1f2f4;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.history-item-head,
+.user-item-head,
+.credential-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.history-meta,
+.user-meta,
+.credential-meta {
+  font-size: 12px;
+  color: #667085;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f5f6f8;
+  color: #344054;
+}
+
+.status-pill.succeeded { background: #ecfdf3; color: #027a48; }
+.status-pill.running { background: #fff7ed; color: #b54708; }
+.status-pill.queued { background: #eff8ff; color: #175cd3; }
+.status-pill.failed { background: #fef3f2; color: #b42318; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  border: 1px solid #f1d6e3;
+  border-radius: 14px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fffafb 0%, #ffffff 100%);
+}
+
+.stat-card-label {
+  font-size: 12px;
+  color: #667085;
+  margin-bottom: 8px;
+}
+
+.stat-card-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--cibe-pink);
+  line-height: 1;
+}
+</style>
+</head>
+
+<body>
+
+<div class="auth-screen" id="authScreen">
+  <form class="auth-card" id="loginForm">
+    <img class="auth-logo" src="/static/assets/cibe_logo.jpg" alt="CIBE 美博会">
+    <h2>登录 CIBE 白皮书系统</h2>
+    <p>请输入管理员账号密码后继续生成和导出报告。</p>
+    <div class="auth-field">
+      <label for="loginUsername">账号</label>
+      <input id="loginUsername" autocomplete="username" value="admin">
+    </div>
+    <div class="auth-field">
+      <label for="loginPassword">密码</label>
+      <input id="loginPassword" type="password" autocomplete="current-password">
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">登录</button>
+  </form>
+</div>
+
+<!-- ========== 顶部导航 ========== -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="logo-box"><img src="/static/assets/cibe_logo.jpg" alt="CIBE 美博会"></div>
+    <h1>CIBE <span>美业数据白皮书</span>生成系统</h1>
+  </div>
+  <div class="navbar-status"><span id="navStatus">AI 就绪</span><span class="current-user" id="currentUser"></span><button class="logout-btn" id="btnLogout" onclick="logout()" style="display:none">退出登录</button></div>
+</nav>
+
+<!-- ========== 主内容 ========== -->
+<div class="container">
+
+  <!-- 上传区 -->
+  <div class="upload-section">
+    <div class="upload-tabs">
+      <div class="upload-tab active" data-tab="file" onclick="switchTab('file')">
+        📁 上传文件
+      </div>
+      <div class="upload-tab" data-tab="text" onclick="switchTab('text')">
+        📝 粘贴文字
+      </div>
+    </div>
+
+    <!-- 文件上传面板 -->
+    <div class="upload-panel active" id="panel-file">
+      <div class="dropzone" id="dropzone"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event)"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('fileInput').click()">
+        <div class="dropzone-icon">📊</div>
+        <div class="dropzone-title">拖拽文件到此处，或点击选择文件</div>
+        <div class="dropzone-hint">支持 CSV / Excel / Word (.docx) / PDF 格式，可同时上传多个文件</div>
+      </div>
+      <input type="file" id="fileInput" hidden multiple
+             accept=".csv,.xlsx,.xls,.docx,.pdf"
+             onchange="handleFileSelect(event)">
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <!-- 文字粘贴面板 -->
+    <div class="upload-panel" id="panel-text">
+      <textarea class="text-input" id="textInput"
+                placeholder="在此粘贴品牌数据或文字信息...&#10;&#10;例如：&#10;品牌名称：花西子&#10;2024年Q1-Q4营收分别为：3.2亿、4.1亿、5.8亿、7.2亿&#10;主力产品：散粉、眉笔、口红&#10;线上渠道占比：78%"></textarea>
+    </div>
+  </div>
+
+  <!-- 生成按钮 -->
+  <div class="action-bar">
+    <button class="btn btn-primary" id="btnGenerate" onclick="generateWhitepaper()">
+      ✨ 生成白皮书
+    </button>
+  </div>
+
+  <div class="secondary-actions">
+    <button class="btn btn-outline" onclick="toggleHistoryPanel()">🕘 我的历史</button>
+    <button class="btn btn-outline" id="btnAdminPanel" onclick="toggleAdminPanel()" style="display:none">👤 账号分发</button>
+  </div>
+
+  <div class="account-panel" id="historyPanel">
+    <h3>我的历史任务</h3>
+    <div class="history-list" id="historyList">
+      <div class="history-item">正在加载历史记录...</div>
+    </div>
+  </div>
+
+  <div class="account-panel" id="adminPanel">
+    <h3>账号分发器</h3>
+    <p>管理员可以创建单个账号，也可以一键批量生成测试账号。</p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-card-label">账号总数</div>
+        <div class="stat-card-value" id="statUserCount">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">生成任务总数</div>
+        <div class="stat-card-value" id="statJobCount">-</div>
+      </div>
+    </div>
+    <div class="panel-grid">
+      <div class="mini-form">
+        <h4>新建单个账号</h4>
+        <input id="newUsername" placeholder="账号，例如 tester01">
+        <input id="newPassword" placeholder="密码，至少 6 位">
+        <select id="newRole">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createSingleUser()">创建账号</button>
+      </div>
+      <div class="mini-form">
+        <h4>批量生成测试账号</h4>
+        <input id="batchPrefix" placeholder="账号前缀，例如 tester" value="tester">
+        <input id="batchCount" type="number" min="1" max="20" value="5" placeholder="数量">
+        <select id="batchRole">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createBatchUsers()">批量生成</button>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="margin-bottom:10px">刚生成的账号密码</h4>
+      <div class="credential-list" id="generatedCredentials">
+        <div class="credential-item">还没有新生成的账号。</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="margin-bottom:10px">当前账号列表</h4>
+      <div class="user-list" id="userList">
+        <div class="user-item">正在加载账号列表...</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="margin-bottom:10px">全站最近生成内容</h4>
+      <div class="history-list" id="adminJobList">
+        <div class="history-item">正在加载任务看板...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 验证和反射功能区 -->
+  <div class="verification-reflection-section" id="verificationReflectionSection" style="display: none;">
+    <div class="verification-panel">
+      <h3>🔍 数据验证</h3>
+      <div class="verification-content">
+        <div class="verification-status" id="verificationStatus">
+          <span class="status-indicator">⏳ 等待验证</span>
+        </div>
+        <div class="verification-results" id="verificationResults"></div>
+        <div class="verification-actions">
+          <button class="btn btn-outline" onclick="runDataVerification()">
+            🔄 重新验证
+          </button>
+          <button class="btn btn-outline" onclick="exportVerificationReport()">
+            📊 导出验证报告
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reflection-panel">
+      <h3>🤔 AI 反思分析</h3>
+      <div class="reflection-content">
+        <div class="reflection-status" id="reflectionStatus">
+          <span class="status-indicator">⏳ 等待分析</span>
+        </div>
+        <div class="reflection-results" id="reflectionResults"></div>
+        <div class="reflection-actions">
+          <button class="btn btn-outline" onclick="runReflectionAnalysis()">
+            🔄 重新分析
+          </button>
+          <button class="btn btn-outline" onclick="exportReflectionReport()">
+            📝 导出反思报告
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 进度条 -->
+  <div class="progress-section" id="progressSection">
+    <div class="progress-bar-wrapper">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">准备中...</div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar" id="toolbar">
+    <button class="btn btn-outline" id="btnEditMode" onclick="toggleEditMode()">✏️ 编辑模式</button>
+    <button class="btn btn-outline" onclick="window.print()">🖨️ 打印预览</button>
+    <button class="btn btn-secondary" id="btnExport" onclick="exportPDF()">📄 导出 PDF</button>
+  </div>
+
+  <!-- 白皮书预览 -->
+  <div class="preview-section" id="previewSection">
+    <div class="preview-scaler" id="previewScaler">
+    <div class="preview-card" id="previewCard">
+      <!-- 封面页 -->
+      <div class="cover-page" id="coverPage">
+        <div class="cover-badge">CIBE 广州国际美博会</div>
+        <div class="cover-title" id="coverTitle">美业数据洞察白皮书</div>
+        <div class="cover-subtitle" id="coverSubtitle">
+          基于品牌核心数据的深度分析报告<br>
+          洞悉行业趋势，赋能品牌增长
+        </div>
+        <div class="cover-footer" id="coverFooter"></div>
+      </div>
+      <!-- 正文 -->
+      <div class="content-body" id="contentBody"></div>
+    </div>
+    </div><!-- /preview-scaler -->
+  </div>
+
+</div>
+
+<!-- Toast 通知 -->
+<div class="toast" id="toast"></div>
+
+<!-- 图表编辑弹窗 — 全功能可视化编辑器 -->
+<div class="chart-edit-modal" id="chartEditModal" style="display:none" onclick="if(event.target===this)closeChartEditor()">
+  <div class="chart-edit-panel">
+    <!-- 顶栏 -->
+    <div class="ce-header">
+      <h3>📊 图表编辑器</h3>
+      <button class="ce-header-close" onclick="closeChartEditor()" title="关闭">&times;</button>
+    </div>
+
+    <div class="ce-body">
+      <!-- 左侧控制面板 -->
+      <div class="ce-controls">
+
+        <!-- 基础设置 -->
+        <div class="ce-section">
+          <div class="ce-section-title">⚙️ 基础设置</div>
+          <div class="ce-row">
+            <label>标题</label>
+            <input type="text" id="ceTitle" placeholder="图表标题" oninput="cePreview()">
+          </div>
+          <div class="ce-row">
+            <label>类型</label>
+            <select id="ceType" onchange="cePreview()">
+              <option value="bar">📊 柱状图</option>
+              <option value="line">📈 折线图</option>
+              <option value="pie">🥧 饼图</option>
+              <option value="area">📉 面积图</option>
+              <option value="scatter">⭕ 散点图</option>
+            </select>
+          </div>
+          <div class="ce-row">
+            <label>宽度</label>
+            <input type="number" id="ceWidth" value="100" min="50" max="100" step="5" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">%</span>
+            <label style="margin-left:8px">高度</label>
+            <input type="number" id="ceHeight" value="380" min="200" max="600" step="20" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">px</span>
+          </div>
+        </div>
+
+        <!-- 样式设置 -->
+        <div class="ce-section">
+          <div class="ce-section-title">🎨 样式设置</div>
+          <div class="ce-row">
+            <label>圆角</label>
+            <input type="range" id="ceBorderRadius" min="0" max="20" value="4" oninput="cePreview()">
+            <span id="ceBorderRadiusVal" style="font-size:12px;color:#999;min-width:30px">4px</span>
+          </div>
+          <div class="ce-row">
+            <label>柱宽</label>
+            <input type="range" id="ceBarWidth" min="10" max="80" value="50" oninput="cePreview()">
+            <span id="ceBarWidthVal" style="font-size:12px;color:#999;min-width:36px">50px</span>
+          </div>
+          <div class="ce-row">
+            <label>线宽</label>
+            <input type="range" id="ceLineWidth" min="1" max="8" value="2" oninput="cePreview()">
+            <span id="ceLineWidthVal" style="font-size:12px;color:#999;min-width:30px">2px</span>
+          </div>
+          <div class="ce-row">
+            <label>字号</label>
+            <input type="number" id="ceFontSize" value="14" min="10" max="24" step="1" oninput="cePreview()">
+            <span style="font-size:12px;color:#999">px</span>
+          </div>
+          <div class="ce-row" style="flex-wrap:wrap">
+            <label>配色</label>
+            <div class="ce-color-list" id="ceColorList"></div>
+          </div>
+        </div>
+
+        <!-- 数据编辑 -->
+        <div class="ce-section">
+          <div class="ce-section-title">📋 数据编辑</div>
+          <div style="overflow-x:auto">
+            <table class="ce-data-table" id="ceDataTable">
+              <thead id="ceDataThead"></thead>
+              <tbody id="ceDataTbody"></tbody>
+            </table>
+          </div>
+          <div class="ce-table-actions">
+            <button class="ce-mini-btn" onclick="ceAddRow()">➕ 添加行</button>
+            <button class="ce-mini-btn danger" onclick="ceRemoveRow()">🗑️ 删除末行</button>
+            <button class="ce-mini-btn" onclick="ceAddSeries()">➕ 添加系列</button>
+            <button class="ce-mini-btn danger" onclick="ceRemoveSeries()">🗑️ 删除末列</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右侧实时预览 -->
+      <div class="ce-preview">
+        <div class="ce-preview-title">实时预览</div>
+        <div class="ce-preview-chart" id="cePreviewChart"></div>
+      </div>
+    </div>
+
+    <!-- 错误信息 -->
+    <div class="ce-error" id="ceError"></div>
+
+    <!-- 底部操作 -->
+    <div class="ce-footer">
+      <button class="btn btn-outline" onclick="closeChartEditor()">取消</button>
+      <button class="btn btn-primary" style="flex:none;padding:10px 28px" onclick="applyChartEdit()">✅ 应用修改</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================
+// 全局状态
+// =============================================================
+let selectedFiles = [];
+let chartInstances = [];
+let isExporting = false;
+let isEditMode = false;
+let chartDataStore = {};   // chart element ID → { type, title, data }
+let editingChartId = null; // 当前正在编辑的图表 ID
+let pendingImagePromises = [];
+let progressEventSource = null;
+let currentUsername = '';
+let currentUserRole = '';
+const MAX_FILES = 10;
+const API_BASE = window.location.origin;
+
+// =============================================================
+// 登录态
+// =============================================================
+async function checkAuth() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/auth/me`);
+    const data = await resp.json();
+    setAuthVisible(!data.authenticated);
+    document.getElementById('btnLogout').style.display = data.authenticated ? 'inline-block' : 'none';
+    const userEl = document.getElementById('currentUser');
+    userEl.style.display = data.authenticated ? 'inline-block' : 'none';
+    userEl.textContent = data.authenticated ? `已登录：${data.username || 'admin'}` : '';
+    currentUsername = data.username || '';
+    currentUserRole = data.role || '';
+    document.getElementById('btnAdminPanel').style.display =
+      data.authenticated && currentUserRole === 'admin' ? 'inline-flex' : 'none';
+    if (data.authenticated) {
+      await loadHistory();
+      if (currentUserRole === 'admin') {
+        await loadUsers();
+        await loadAdminDashboard();
+      }
+    }
+    return data.authenticated;
+  } catch (err) {
+    setAuthVisible(true);
+    document.getElementById('currentUser').style.display = 'none';
+    document.getElementById('btnAdminPanel').style.display = 'none';
+    return false;
+  }
+}
+
+function setAuthVisible(show) {
+  document.getElementById('authScreen').classList.toggle('show', show);
+}
+
+async function login(event) {
+  event.preventDefault();
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  const formData = new FormData();
+  formData.append('username', document.getElementById('loginUsername').value.trim());
+  formData.append('password', document.getElementById('loginPassword').value);
+  try {
+    const resp = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: '登录失败' }));
+      throw new Error(err.detail || '登录失败');
+    }
+    setAuthVisible(false);
+    document.getElementById('btnLogout').style.display = 'inline-block';
+    const userEl = document.getElementById('currentUser');
+    userEl.style.display = 'inline-block';
+    userEl.textContent = `已登录：${document.getElementById('loginUsername').value.trim() || 'admin'}`;
+    showToast('登录成功', 'success');
+    await checkAuth();
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+}
+
+async function logout() {
+  await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' }).catch(() => {});
+  document.getElementById('btnLogout').style.display = 'none';
+  document.getElementById('currentUser').style.display = 'none';
+  document.getElementById('currentUser').textContent = '';
+  document.getElementById('btnAdminPanel').style.display = 'none';
+  document.getElementById('historyPanel').classList.remove('show');
+  document.getElementById('adminPanel').classList.remove('show');
+  setAuthVisible(true);
+}
+
+function formatDateTime(ts) {
+  if (!ts) return '未开始';
+  const d = new Date(ts * 1000);
+  return d.toLocaleString('zh-CN', { hour12: false });
+}
+
+function statusPill(status) {
+  const labelMap = {
+    queued: '排队中',
+    running: '生成中',
+    succeeded: '已完成',
+    failed: '失败'
+  };
+  return `<span class="status-pill ${status || ''}">${labelMap[status] || status || '未知'}</span>`;
+}
+
+function toggleHistoryPanel() {
+  const panel = document.getElementById('historyPanel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) loadHistory();
+}
+
+function toggleAdminPanel() {
+  if (currentUserRole !== 'admin') {
+    showToast('仅管理员可用', 'error');
+    return;
+  }
+  const panel = document.getElementById('adminPanel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    loadUsers();
+    loadAdminDashboard();
+  }
+}
+
+async function loadHistory() {
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<div class="history-item">正在加载历史记录...</div>';
+  try {
+    const resp = await fetch(`${API_BASE}/api/jobs?limit=30`);
+    const data = await resp.json();
+    const jobs = data.jobs || [];
+    if (!jobs.length) {
+      list.innerHTML = '<div class="history-item">当前账号还没有历史任务。</div>';
+      return;
+    }
+    list.innerHTML = jobs.map(job => `
+      <div class="history-item">
+        <div class="history-item-head">
+          <strong>${escapeHtml(job.title || job.id)}</strong>
+          ${statusPill(job.status)}
+        </div>
+        <div class="history-meta">创建时间：${formatDateTime(job.created_at)} | 开始：${formatDateTime(job.started_at)} | 完成：${formatDateTime(job.finished_at)}</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          ${job.status === 'succeeded' ? `<button class="btn btn-outline" onclick="openHistoryJob('${job.id}')">打开报告</button>` : ''}
+          <button class="btn btn-outline" onclick="deleteHistoryJob('${job.id}')">删除历史</button>
+          <span class="history-meta">任务ID：${escapeHtml(job.id)}</span>
+          ${job.status === 'failed' && job.error ? `<span style="font-size:12px;color:#b42318">${escapeHtml(job.error)}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<div class="history-item">历史记录加载失败：${escapeHtml(err.message || '未知错误')}</div>`;
+  }
+}
+
+async function openHistoryJob(jobId) {
+  try {
+    const resp = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
+    const payload = await resp.json();
+    const job = payload.job || {};
+    if (!job.markdown) {
+      throw new Error('该历史任务没有可展示的报告内容');
+    }
+    await renderWhitepaper(job.markdown);
+    document.getElementById('toolbar').classList.add('show');
+    document.getElementById('previewSection').classList.add('show');
+    document.getElementById('navStatus').textContent = `已打开历史任务：${jobId}`;
+    showToast('历史报告已加载', 'success');
+    setTimeout(() => {
+      resizeAllCharts();
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+  } catch (err) {
+    showToast(err.message || '历史报告加载失败', 'error');
+  }
+}
+
+async function deleteHistoryJob(jobId) {
+  if (!confirm('确认删除这条历史记录吗？删除后不可恢复。')) return;
+  try {
+    const resp = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.detail || '删除历史失败');
+    showToast('历史记录已删除', 'success');
+    await loadHistory();
+  } catch (err) {
+    showToast(err.message || '删除历史失败', 'error');
+  }
+}
+
+async function loadUsers() {
+  if (currentUserRole !== 'admin') return;
+  const list = document.getElementById('userList');
+  list.innerHTML = '<div class="user-item">正在加载账号列表...</div>';
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/users?limit=100`);
+    const data = await resp.json();
+    const users = data.users || [];
+    list.innerHTML = users.map(user => `
+      <div class="user-item">
+        <div class="user-item-head">
+          <strong>${escapeHtml(user.username)}</strong>
+          <span class="status-pill">${user.role === 'admin' ? '管理员' : '普通用户'}</span>
+        </div>
+        <div class="user-meta">创建时间：${formatDateTime(user.created_at)}</div>
+      </div>
+    `).join('') || '<div class="user-item">暂无账号。</div>';
+  } catch (err) {
+    list.innerHTML = `<div class="user-item">账号列表加载失败：${escapeHtml(err.message || '未知错误')}</div>`;
+  }
+}
+
+async function loadAdminDashboard() {
+  if (currentUserRole !== 'admin') return;
+  const jobList = document.getElementById('adminJobList');
+  jobList.innerHTML = '<div class="history-item">正在加载任务看板...</div>';
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/dashboard?limit=30`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || '管理员看板加载失败');
+    const metrics = data.metrics || {};
+    document.getElementById('statUserCount').textContent = metrics.user_count ?? 0;
+    document.getElementById('statJobCount').textContent = metrics.job_count ?? 0;
+    const jobs = data.recent_jobs || [];
+    if (!jobs.length) {
+      jobList.innerHTML = '<div class="history-item">还没有任何生成任务。</div>';
+      return;
+    }
+    jobList.innerHTML = jobs.map(job => `
+      <div class="history-item">
+        <div class="history-item-head">
+          <strong>${escapeHtml(job.title || job.id)}</strong>
+          ${statusPill(job.status)}
+        </div>
+        <div class="history-meta">账号：${escapeHtml(job.username)} | 创建：${formatDateTime(job.created_at)}</div>
+        <div style="margin-top:8px;font-size:13px;color:#475467">${escapeHtml(job.preview || '')}</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="adminOpenJob('${job.id}')">打开内容</button>
+          <button class="btn btn-outline" onclick="adminDeleteJob('${job.id}')">删除历史</button>
+          <span class="history-meta">任务ID：${escapeHtml(job.id)}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    jobList.innerHTML = `<div class="history-item">管理员看板加载失败：${escapeHtml(err.message || '未知错误')}</div>`;
+  }
+}
+
+async function adminOpenJob(jobId) {
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(jobId)}`);
+    const payload = await resp.json();
+    if (!resp.ok) throw new Error(payload.detail || '任务内容加载失败');
+    const job = payload.job || {};
+    const markdown = job.markdown || '';
+    if (!markdown) {
+      throw new Error('该任务还没有生成完成的报告内容');
+    }
+    await renderWhitepaper(markdown);
+    document.getElementById('toolbar').classList.add('show');
+    document.getElementById('previewSection').classList.add('show');
+    document.getElementById('navStatus').textContent = `管理员查看：${job.username} / ${job.title || job.id}`;
+    showToast('任务内容已打开', 'success');
+    setTimeout(() => {
+      resizeAllCharts();
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+  } catch (err) {
+    showToast(err.message || '任务内容加载失败', 'error');
+  }
+}
+
+async function adminDeleteJob(jobId) {
+  if (!confirm('确认删除这条用户历史吗？删除后不可恢复。')) return;
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.detail || '删除任务失败');
+    showToast('任务历史已删除', 'success');
+    await loadAdminDashboard();
+    await loadHistory();
+  } catch (err) {
+    showToast(err.message || '删除任务失败', 'error');
+  }
+}
+
+function renderGeneratedCredentials(users) {
+  const box = document.getElementById('generatedCredentials');
+  if (!users || !users.length) {
+    box.innerHTML = '<div class="credential-item">还没有新生成的账号。</div>';
+    return;
+  }
+  box.innerHTML = users.map(user => `
+    <div class="credential-item">
+      <div class="credential-item-head">
+        <strong>${escapeHtml(user.username)}</strong>
+        <span class="status-pill">${user.role === 'admin' ? '管理员' : '普通用户'}</span>
+      </div>
+      <div class="credential-meta">密码：<code>${escapeHtml(user.password)}</code></div>
+    </div>
+  `).join('');
+}
+
+async function createSingleUser() {
+  const formData = new FormData();
+  formData.append('username', document.getElementById('newUsername').value.trim());
+  formData.append('password', document.getElementById('newPassword').value);
+  formData.append('role', document.getElementById('newRole').value);
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/users`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || '创建账号失败');
+    renderGeneratedCredentials([data.user]);
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
+    showToast('账号创建成功', 'success');
+    await loadUsers();
+  } catch (err) {
+    showToast(err.message || '创建账号失败', 'error');
+  }
+}
+
+async function createBatchUsers() {
+  const formData = new FormData();
+  formData.append('prefix', document.getElementById('batchPrefix').value.trim() || 'tester');
+  formData.append('count', document.getElementById('batchCount').value || '5');
+  formData.append('role', document.getElementById('batchRole').value);
+  try {
+    const resp = await fetch(`${API_BASE}/api/admin/users/batch`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || '批量创建失败');
+    renderGeneratedCredentials(data.users || []);
+    showToast(`已生成 ${(data.users || []).length} 个测试账号`, 'success');
+    await loadUsers();
+  } catch (err) {
+    showToast(err.message || '批量创建失败', 'error');
+  }
+}
+
+// =============================================================
+// Tab 切换
+// =============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.upload-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.upload-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`panel-${tab}`).classList.add('active');
+}
+
+// =============================================================
+// 文件处理
+// =============================================================
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('dragover');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('dragover');
+  Array.from(e.dataTransfer.files).forEach(f => addFile(f));
+}
+
+function handleFileSelect(e) {
+  Array.from(e.target.files).forEach(f => addFile(f));
+  e.target.value = '';  // 允许重复选择同名文件
+}
+
+function addFile(file) {
+  const validExts = ['csv', 'xlsx', 'xls', 'docx', 'pdf'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!validExts.includes(ext)) {
+    showToast(`不支持的格式: ${file.name}，请上传 CSV/Excel/Word/PDF`, 'error');
+    return;
+  }
+  if (selectedFiles.length >= MAX_FILES) {
+    showToast(`最多上传 ${MAX_FILES} 个文件`, 'error');
+    return;
+  }
+  // 查重
+  if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) return;
+  selectedFiles.push(file);
+  renderFileList();
+}
+
+function removeFileAt(index) {
+  selectedFiles.splice(index, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  const container = document.getElementById('fileList');
+  if (selectedFiles.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-list-item">
+      <span class="file-item-icon">📎</span>
+      <span class="file-item-name">${escapeHtml(f.name)}</span>
+      <span class="file-item-size">${formatSize(f.size)}</span>
+      <span class="file-item-remove" onclick="removeFileAt(${i})">✕</span>
+    </div>
+  `).join('');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// =============================================================
+// 生成白皮书
+// =============================================================
+async function generateWhitepaper() {
+  const textInput = document.getElementById('textInput').value.trim();
+  const activeTab = document.querySelector('.upload-tab.active').dataset.tab;
+
+  if (activeTab === 'file' && selectedFiles.length === 0) {
+    showToast('请先上传至少一个数据文件', 'error');
+    return;
+  }
+  if (activeTab === 'text' && !textInput) {
+    showToast('请输入文字内容', 'error');
+    return;
+  }
+
+  // 准备表单数据（支持多文件）
+  const formData = new FormData();
+  const jobId = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  formData.append('job_id', jobId);
+  if (activeTab === 'file') {
+    selectedFiles.forEach(f => formData.append('files', f));
+  } else {
+    formData.append('text', textInput);
+  }
+
+  // UI 状态
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 生成中...';
+  showProgress(true);
+  clearProgressLog();
+  startProgressStream(jobId);
+  updateProgress(10, '正在解析数据...');
+  document.getElementById('navStatus').textContent = '生成中...';
+
+  try {
+    updateProgress(25, '正在调用 AI 分析数据...');
+
+    const resp = await fetch(`${API_BASE}/api/generate`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: '服务器错误' }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (data.status !== 'queued' || !data.job_id) {
+      throw new Error('任务提交返回异常');
+    }
+
+    updateProgress(35, '任务已进入后台队列，正在等待生成结果...');
+    const job = await waitForJobResult(data.job_id);
+    if (!job.markdown) {
+      throw new Error('任务完成但未返回白皮书内容');
+    }
+    updateProgress(80, '正在渲染图表与配图...');
+
+    // 渲染白皮书
+    await renderWhitepaper(job.markdown);
+
+    updateProgress(100, '生成完成！');
+
+    // 显示工具栏和预览
+    document.getElementById('toolbar').classList.add('show');
+    document.getElementById('previewSection').classList.add('show');
+    document.getElementById('navStatus').textContent = '生成完成';
+    showToast('白皮书生成成功！', 'success');
+
+    // 滚动到预览区
+    setTimeout(() => {
+      resizeAllCharts();
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+
+  } catch (err) {
+    showToast(err.message, 'error');
+    document.getElementById('navStatus').textContent = '生成失败';
+  } finally {
+    stopProgressStream();
+    btn.disabled = false;
+    btn.innerHTML = '✨ 生成白皮书';
+    setTimeout(() => showProgress(false), 1500);
+  }
+}
+
+async function waitForJobResult(jobId, timeoutMs = 15 * 60 * 1000) {
+  const startedAt = Date.now();
+  let lastStatus = '';
+  while (Date.now() - startedAt < timeoutMs) {
+    const resp = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: '任务状态读取失败' }));
+      throw new Error(err.detail || '任务状态读取失败');
+    }
+    const payload = await resp.json();
+    const job = payload.job || {};
+    if (job.status !== lastStatus) {
+      lastStatus = job.status;
+      appendProgressLog(`任务状态：${job.status}`);
+    }
+    if (job.status === 'queued') {
+      updateProgress(35, '任务排队中...');
+    } else if (job.status === 'running') {
+      updateProgress(62, '后台正在生成白皮书...');
+    } else if (job.status === 'succeeded') {
+      return job;
+    } else if (job.status === 'failed') {
+      throw new Error(job.error || '后台生成失败');
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+  throw new Error('生成任务等待超时，请到任务状态接口检查结果');
+}
+
+// =============================================================
+// 白皮书渲染
+// =============================================================
+async function renderWhitepaper(markdown) {
+  // 销毁旧图表
+  chartInstances.forEach(c => c.dispose());
+  chartInstances = [];
+  pendingImagePromises = [];
+
+  // 设置封面日期
+  const now = new Date();
+  document.getElementById('coverFooter').textContent =
+    `${now.getFullYear()} 年 ${now.getMonth() + 1} 月  |  CIBE 美博会 · AI 智能分析`;
+
+  // 从 markdown 提取标题作为封面标题
+  const titleMatch = markdown.match(/^#\s+(.+)/m);
+  if (titleMatch) {
+    document.getElementById('coverTitle').textContent = titleMatch[1];
+  }
+
+  // 1. 提取 <chart> 和 <image> 标签，替换为占位符
+  let chartIdx = 0;
+  let imageIdx = 0;
+  const chartDataMap = {};
+  const imagePromptMap = {};
+
+  // 处理 chart 标签。后端会转义属性，这里要同时兼容单/双引号和 HTML entity。
+  markdown = markdown.replace(/<chart\b([^>]*)><\/chart>/g, (match, attrs) => {
+    const id = `chart-${chartIdx++}`;
+    const readAttr = (name) => {
+      const reg = new RegExp(`${name}=([\"'])(.*?)\\1`, 'i');
+      const found = attrs.match(reg);
+      return found ? decodeHtml(found[2]) : '';
+    };
+    const type = readAttr('type') || 'bar';
+    const title = readAttr('title') || '数据图表';
+    const dataStr = readAttr('data');
+    try {
+      chartDataMap[id] = { type, title, data: normalizeChartData(JSON.parse(dataStr)) };
+    } catch (e) {
+      console.warn('[Chart] 图表数据解析失败，已跳过:', e);
+      chartDataMap[id] = { type, title, data: null };
+    }
+    return `<div class="chart-container" id="${id}"></div>`;
+  });
+
+  // 处理 image 标签
+  markdown = markdown.replace(
+    /<image\s+prompt=["']([^"']+)["']><\/image>/g,
+    (match, prompt) => {
+      const id = `genimg-${imageIdx++}`;
+      imagePromptMap[id] = decodeHtml(prompt);
+      return `<div class="image-container" id="${id}"><div class="image-loading loading-pulse">🎨 正在生成配图...</div></div>`;
+    }
+  );
+
+  // 2. 渲染 Markdown
+  const contentBody = document.getElementById('contentBody');
+  contentBody.innerHTML = marked.parse(markdown);
+
+  // 3. 初始化 ECharts
+  await new Promise(r => setTimeout(r, 200));  // 等待 DOM 布局
+  for (const [id, cfg] of Object.entries(chartDataMap)) {
+    const el = document.getElementById(id);
+    if (el && cfg.data) {
+      try {
+        const chart = echarts.init(el);
+        chart.setOption(buildChartOption(cfg.type, cfg.title, cfg.data), true);
+        chartInstances.push(chart);
+      } catch (e) {
+        console.warn('[Chart] 图表渲染失败，已降级为占位:', e);
+        el.innerHTML = '<div class="image-placeholder">图表数据异常，已跳过渲染</div>';
+      }
+    }
+  }
+  // 延迟 resize 确保尺寸正确
+  await new Promise(r => setTimeout(r, 100));
+  chartInstances.forEach(c => c.resize());
+
+  // 4. 保存图表数据到全局（供编辑模式使用）
+  chartDataStore = { ...chartDataMap };
+
+  // 5. 异步生成配图（不阻塞主流程）
+  for (const [id, prompt] of Object.entries(imagePromptMap)) {
+    pendingImagePromises.push(generateAndFillImage(id, prompt));
+  }
+
+  // 6. 重置编辑模式
+  if (isEditMode) toggleEditMode();
+}
+
+// =============================================================
+// ECharts 配置构建 — CIBE 玫红主题
+// =============================================================
+const CIBE_COLORS = ['#E3004F', '#FF6B9D', '#2D3748', '#E9967A', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+
+function decodeHtml(str) {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = str || '';
+  return textarea.value;
+}
+
+function normalizeChartData(data) {
+  if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets) || data.datasets.length === 0) {
+    return null;
+  }
+  const labels = data.labels.map(v => String(v || '').trim()).filter(Boolean).slice(0, 7);
+  if (labels.length < 2) return null;
+  const datasets = data.datasets.slice(0, 3).map((ds, idx) => {
+    const rawValues = Array.isArray(ds.values) ? ds.values : [];
+    const values = labels.map((_, i) => {
+      const n = Number(rawValues[i]);
+      return Number.isFinite(n) ? n : 0;
+    });
+    return {
+      name: String(ds.name || `系列${idx + 1}`).slice(0, 24),
+      values,
+    };
+  }).filter(ds => ds.values.length === labels.length);
+  if (!datasets.length) return null;
+  return { labels, datasets };
+}
+
+function buildChartOption(type, title, data) {
+  data = normalizeChartData(data);
+  if (!data) {
+    throw new Error('Invalid chart data');
+  }
+  const base = {
+    title: {
+      text: title,
+      left: 'center',
+      top: 12,
+      textStyle: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: '#1A1A2E',
+        width: 600,
+        overflow: 'break',
+      },
+    },
+    tooltip: {
+      trigger: type === 'pie' ? 'item' : 'axis',
+      confine: true,
+    },
+    color: CIBE_COLORS,
+    animation: true,
+  };
+
+  if (type === 'pie') {
+    return {
+      ...base,
+      legend: {
+        bottom: 10,
+        left: 'center',
+        textStyle: { fontSize: 11 },
+        type: 'scroll',
+      },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '58%'],
+        center: ['50%', '48%'],
+        data: data.labels.map((label, i) => ({
+          name: label,
+          value: data.datasets[0].values[i],
+        })),
+        label: {
+          formatter: '{b}\n{d}%',
+          fontSize: 11,
+          lineHeight: 16,
+          position: 'outside',
+        },
+        labelLine: { length: 12, length2: 8 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
+      }],
+    };
+  }
+
+  if (type === 'scatter') {
+    return {
+      ...base,
+      grid: { left: 50, right: 30, top: 50, bottom: 40, containLabel: true },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'value' },
+      series: data.datasets.map((ds, i) => ({
+        name: ds.name,
+        type: 'scatter',
+        data: ds.values.map((v, j) => [data.labels[j] || j, v]),
+        symbolSize: 14,
+      })),
+    };
+  }
+
+  // bar / line / area
+  const chartType = type === 'area' ? 'line' : type;
+  return {
+    ...base,
+    grid: { left: 20, right: 30, top: 55, bottom: 45, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: data.labels,
+      axisLabel: { fontSize: 11, interval: 0, rotate: data.labels.length > 6 ? 30 : 0 },
+      axisTick: { alignWithLabel: true },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } },
+    },
+    legend: {
+      bottom: 5,
+      textStyle: { fontSize: 11 },
+      type: 'scroll',
+    },
+    series: data.datasets.map((ds, i) => ({
+      name: ds.name,
+      type: chartType,
+      data: ds.values,
+      smooth: true,
+      areaStyle: type === 'area' ? { opacity: 0.15 } : undefined,
+      barMaxWidth: 50,
+      barMinWidth: 15,
+      label: {
+        show: data.datasets.length === 1 && data.labels.length <= 8,
+        position: 'top',
+        fontSize: 11,
+        color: '#666',
+      },
+    })),
+  };
+}
+
+// =============================================================
+// 豆包星绘配图
+// =============================================================
+async function generateAndFillImage(containerId, prompt) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  try {
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('width', '768');
+    formData.append('height', '512');
+
+    const resp = await fetch(`${API_BASE}/api/generate-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const result = await resp.json();
+
+    if (result.status === 'success' && result.image_base64) {
+      container.innerHTML = `<img src="data:image/png;base64,${result.image_base64}" alt="${prompt}">`;
+    } else if (result.status === 'unavailable') {
+      // 星绘未配置 → 显示优雅的占位图
+      container.innerHTML = `
+        <div class="image-placeholder">
+          <div style="font-size:36px;margin-bottom:8px">🖼️</div>
+          <div>配图位置（豆包星绘未配置）</div>
+          <div style="font-size:12px;margin-top:4px;color:#bbb">${escapeHtml(prompt)}</div>
+        </div>`;
+    } else {
+      container.innerHTML = `
+        <div class="image-placeholder">
+          <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+          <div>配图生成失败</div>
+          <div style="font-size:12px;margin-top:4px;color:#bbb">${escapeHtml(result.message || '')}</div>
+        </div>`;
+    }
+  } catch (e) {
+    container.innerHTML = `
+      <div class="image-placeholder">
+        <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+        <div>配图请求失败</div>
+      </div>`;
+  }
+}
+
+async function waitForGeneratedImages(timeoutMs = 90000) {
+  if (pendingImagePromises.length) {
+    await Promise.race([
+      Promise.allSettled(pendingImagePromises),
+      new Promise(resolve => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
+
+  const images = Array.from(document.querySelectorAll('#contentBody .image-container img'));
+  await Promise.allSettled(images.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    if (typeof img.decode === 'function') return img.decode().catch(() => {});
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+      setTimeout(resolve, 5000);
+    });
+  }));
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// =============================================================
+// PDF 导出 — 智能分页，避免内容截断
+// =============================================================
+async function exportPDF() {
+  if (isExporting) return;
+  isExporting = true;
+
+  const btn = document.getElementById('btnExport');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 导出中...';
+
+  // 临时退出编辑模式（移除 UI 干扰元素）
+  const wasEditMode = isEditMode;
+  if (wasEditMode) toggleEditMode();
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const PAGE_W = 210;   // mm
+    const PAGE_H = 297;   // mm
+    const MARGIN = 10;    // mm 上下页边距
+    const USABLE_H = PAGE_H - MARGIN * 2;
+
+    if (pendingImagePromises.length) {
+      btn.innerHTML = '⏳ 等待配图...';
+      await waitForGeneratedImages();
+      btn.innerHTML = '⏳ 导出中...';
+    }
+
+    // ---- 1. ECharts → 静态图片 ----
+    const chartSnapshots = [];
+    chartInstances.forEach(chart => {
+      const el = chart.getDom();
+      const dataUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      chartSnapshots.push({ el, originalHTML: el.innerHTML, img });
+      el.innerHTML = '';
+      el.appendChild(img);
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // ---- 2. 截图封面页（独占一页）----
+    const coverEl = document.getElementById('coverPage');
+    const coverCanvas = await html2canvas(coverEl, {
+      scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#E3004F', logging: false,
+    });
+    const coverImg = coverCanvas.toDataURL('image/jpeg', 0.95);
+    const coverRatio = coverCanvas.height / coverCanvas.width;
+    const coverH = PAGE_W * coverRatio;
+    // 封面居中
+    const coverY = Math.max(0, (PAGE_H - coverH) / 2);
+    pdf.addImage(coverImg, 'JPEG', 0, coverY, PAGE_W, coverH);
+
+    // ---- 3. 正文逐块截图 + 智能分页 ----
+    const contentBody = document.getElementById('contentBody');
+    // 收集所有直接子块元素
+    const blocks = Array.from(contentBody.children);
+
+    let cursorY = MARGIN; // 当前页面光标位置 (mm)
+    let needNewPage = true; // 封面后需要新页
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      if (!block.offsetHeight || block.offsetHeight < 2) continue;
+
+      // 检测是否为 h2（一级标题），或包含 h2 的 hr 分隔线后的第一个块
+      // h2 元素 = 执行摘要、目录、研究说明、各章标题、结论等 → 强制新起一页
+      const isH2 = block.tagName === 'H2';
+      const isHR = block.tagName === 'HR';
+
+      // hr 分隔线跳过不渲染（视觉分页已由强制换页替代）
+      if (isHR) {
+        needNewPage = true;
+        continue;
+      }
+
+      // h2 标题强制新起一页
+      if (isH2 || needNewPage) {
+        pdf.addPage();
+        cursorY = MARGIN;
+        needNewPage = false;
+      }
+
+      const blockCanvas = await html2canvas(block, {
+        scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false,
+      });
+
+      const blockImgData = blockCanvas.toDataURL('image/jpeg', 0.92);
+      const blockRatio = blockCanvas.height / blockCanvas.width;
+      const blockWmm = PAGE_W - MARGIN * 2;
+      const blockHmm = blockWmm * blockRatio;
+
+      // 如果这个块放不下当前页的剩余空间，换新页
+      if (cursorY + blockHmm > PAGE_H - MARGIN) {
+        pdf.addPage();
+        cursorY = MARGIN;
+      }
+
+      // 超高块（比一整页还高）：缩放填满页面
+      if (blockHmm > USABLE_H) {
+        const fitScale = USABLE_H / blockHmm;
+        const fitW = blockWmm * fitScale;
+        const fitX = MARGIN + (blockWmm - fitW) / 2;
+        pdf.addImage(blockImgData, 'JPEG', fitX, cursorY, fitW, USABLE_H);
+        cursorY = PAGE_H; // 强制下一块换页
+      } else {
+        pdf.addImage(blockImgData, 'JPEG', MARGIN, cursorY, blockWmm, blockHmm);
+        cursorY += blockHmm + 2; // 2mm 间距
+      }
+    }
+
+    // ---- 4. 下载 ----
+    const fileName = `CIBE白皮书_${new Date().toISOString().slice(0, 10)}.pdf`;
+    pdf.save(fileName);
+    showToast('PDF 导出成功！', 'success');
+
+    // ---- 5. 恢复 ECharts ----
+    chartSnapshots.forEach(({ el, originalHTML }) => {
+      el.innerHTML = originalHTML;
+    });
+    chartInstances.forEach(chart => chart.resize());
+
+  } catch (err) {
+    console.error('PDF 导出失败:', err);
+    showToast('PDF 导出失败: ' + err.message, 'error');
+  } finally {
+    isExporting = false;
+    btn.disabled = false;
+    btn.innerHTML = '📄 导出 PDF';
+    // 恢复编辑模式
+    if (wasEditMode) toggleEditMode();
+  }
+}
+
+// =============================================================
+// 进度条
+// =============================================================
+function showProgress(show) {
+  document.getElementById('progressSection').classList.toggle('show', show);
+  if (!show) {
+    document.getElementById('progressBar').style.width = '0%';
+    clearProgressLog();
+  }
+}
+
+function updateProgress(pct, text) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+function clearProgressLog() {
+  const log = document.getElementById('progressLog');
+  if (!log) return;
+  log.innerHTML = '';
+  log.classList.remove('show');
+}
+
+function appendProgressLog(message) {
+  const log = document.getElementById('progressLog');
+  if (!log || !message) return;
+  log.classList.add('show');
+  const line = document.createElement('div');
+  line.className = 'progress-log-line';
+  line.textContent = message;
+  log.appendChild(line);
+  while (log.children.length > 160) {
+    log.removeChild(log.firstChild);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function progressPercentFromMessage(message) {
+  if (message.includes('[Research]')) return 25;
+  if (message.includes('第一批') || message.includes('战略官')) return 42;
+  if (message.includes('第二批') || message.includes('主笔')) return 58;
+  if (message.includes('第三批') || message.includes('图表')) return 72;
+  if (message.includes('合并完整')) return 84;
+  if (message.includes('反思') || message.includes('验证')) return 92;
+  if (message.includes('完成')) return 96;
+  return null;
+}
+
+function startProgressStream(jobId) {
+  stopProgressStream();
+  if (!window.EventSource) {
+    appendProgressLog('当前浏览器不支持流式日志，继续使用普通进度条。');
+    return;
+  }
+  progressEventSource = new EventSource(`${API_BASE}/api/progress/${encodeURIComponent(jobId)}`);
+  progressEventSource.addEventListener('progress', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      appendProgressLog(payload.message);
+      const pct = progressPercentFromMessage(payload.message);
+      if (pct !== null) updateProgress(pct, payload.message);
+    } catch (err) {
+      appendProgressLog(event.data);
+    }
+  });
+  progressEventSource.addEventListener('done', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      appendProgressLog(payload.message || '生成完成');
+    } catch (err) {
+      appendProgressLog('生成完成');
+    }
+    stopProgressStream();
+  });
+  progressEventSource.onerror = () => {
+    appendProgressLog('流式日志连接暂时中断，生成任务仍在继续。');
+    stopProgressStream();
+  };
+}
+
+function stopProgressStream() {
+  if (progressEventSource) {
+    progressEventSource.close();
+    progressEventSource = null;
+  }
+}
+
+// =============================================================
+// Toast 通知
+// =============================================================
+function showToast(msg, type = '') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast show ' + type;
+  setTimeout(() => { toast.className = 'toast'; }, 3500);
+}
+
+// =============================================================
+// 自适应：图表跟随容器 resize
+// =============================================================
+function resizeAllCharts() {
+  chartInstances.forEach(c => c.resize());
+}
+
+// =============================================================
+// 初始化
+// =============================================================
+window.addEventListener('resize', resizeAllCharts);
+
+// =============================================================
+// 编辑模式
+// =============================================================
+const EDITABLE_SELECTORS = 'h2, h3, p, li, blockquote, th, td';
+
+function toggleEditMode() {
+  isEditMode = !isEditMode;
+  const card = document.getElementById('previewCard');
+  const btn = document.getElementById('btnEditMode');
+
+  if (isEditMode) {
+    card.classList.add('edit-mode');
+    btn.classList.add('btn-edit-active');
+    btn.innerHTML = '✏️ 退出编辑';
+
+    // 封面可编辑
+    document.getElementById('coverTitle').setAttribute('contenteditable', 'true');
+    document.getElementById('coverSubtitle').setAttribute('contenteditable', 'true');
+
+    // 正文叶级元素可编辑
+    document.querySelectorAll(`#contentBody ${EDITABLE_SELECTORS}`).forEach(el => {
+      el.setAttribute('contenteditable', 'true');
+    });
+
+    // 注入操作浮层
+    injectEditOverlays();
+
+    // 粘贴净化
+    document.getElementById('contentBody').addEventListener('paste', pasteAsPlainText, true);
+    document.getElementById('coverPage').addEventListener('paste', pasteAsPlainText, true);
+
+  } else {
+    card.classList.remove('edit-mode');
+    btn.classList.remove('btn-edit-active');
+    btn.innerHTML = '✏️ 编辑模式';
+
+    // 移除 contenteditable
+    document.getElementById('coverTitle').removeAttribute('contenteditable');
+    document.getElementById('coverSubtitle').removeAttribute('contenteditable');
+    document.querySelectorAll(`#contentBody [contenteditable]`).forEach(el => {
+      el.removeAttribute('contenteditable');
+    });
+
+    // 移除浮层
+    removeEditOverlays();
+
+    // 移除粘贴监听
+    document.getElementById('contentBody').removeEventListener('paste', pasteAsPlainText, true);
+    document.getElementById('coverPage').removeEventListener('paste', pasteAsPlainText, true);
+  }
+}
+
+function pasteAsPlainText(e) {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text/plain');
+  document.execCommand('insertText', false, text);
+}
+
+// --- 操作浮层 ---
+function injectEditOverlays() {
+  removeEditOverlays(); // 清理残留
+
+  // 图表浮层：编辑 + 删除
+  document.querySelectorAll('#contentBody .chart-container').forEach(el => {
+    const overlay = document.createElement('div');
+    overlay.className = 'edit-overlay';
+    overlay.innerHTML = `
+      <button class="edit-overlay-btn edit-chart" title="编辑图表" onclick="openChartEditor('${el.id}')">✏️</button>
+      <button class="edit-overlay-btn delete" title="删除图表" onclick="deleteElement('${el.id}')">🗑️</button>
+    `;
+    el.appendChild(overlay);
+  });
+
+  // 配图浮层：仅删除
+  document.querySelectorAll('#contentBody .image-container').forEach(el => {
+    const overlay = document.createElement('div');
+    overlay.className = 'edit-overlay';
+    overlay.innerHTML = `
+      <button class="edit-overlay-btn delete" title="删除配图" onclick="deleteElement('${el.id}')">🗑️</button>
+    `;
+    el.appendChild(overlay);
+  });
+}
+
+function removeEditOverlays() {
+  document.querySelectorAll('.edit-overlay').forEach(el => el.remove());
+}
+
+// --- 删除图表/配图 ---
+function deleteElement(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  // 如果是图表，销毁 ECharts 实例
+  if (id.startsWith('chart-')) {
+    const idx = chartInstances.findIndex(c => c.getDom() === el);
+    if (idx !== -1) {
+      chartInstances[idx].dispose();
+      chartInstances.splice(idx, 1);
+    }
+    delete chartDataStore[id];
+  }
+
+  el.remove();
+}
+
+// --- 图表可视化编辑器 ---
+let cePreviewInstance = null;  // 编辑器内的预览 ECharts 实例
+let ceColors = [];             // 当前编辑中的配色数组
+let ceChartSize = { width: 100, height: 380 }; // 图表尺寸
+
+function openChartEditor(chartId) {
+  editingChartId = chartId;
+  const cfg = chartDataStore[chartId];
+  if (!cfg) return;
+
+  // 填充基础设置
+  document.getElementById('ceTitle').value = cfg.title || '';
+  document.getElementById('ceType').value = cfg.type || 'bar';
+  document.getElementById('ceError').textContent = '';
+
+  // 读取已保存的样式或使用默认值
+  const style = cfg.style || {};
+  ceChartSize = { width: style.width || 100, height: style.height || 380 };
+  document.getElementById('ceWidth').value = ceChartSize.width;
+  document.getElementById('ceHeight').value = ceChartSize.height;
+  document.getElementById('ceBorderRadius').value = style.borderRadius ?? 4;
+  document.getElementById('ceBorderRadiusVal').textContent = (style.borderRadius ?? 4) + 'px';
+  document.getElementById('ceBarWidth').value = style.barWidth ?? 50;
+  document.getElementById('ceBarWidthVal').textContent = (style.barWidth ?? 50) + 'px';
+  document.getElementById('ceLineWidth').value = style.lineWidth ?? 2;
+  document.getElementById('ceLineWidthVal').textContent = (style.lineWidth ?? 2) + 'px';
+  document.getElementById('ceFontSize').value = style.fontSize ?? 14;
+
+  // 配色
+  ceColors = style.colors ? [...style.colors] : [...CIBE_COLORS];
+  ceBuildColorPickers();
+
+  // 构建数据表格
+  ceBuildDataTable(cfg.data);
+
+  // 显示弹窗
+  document.getElementById('chartEditModal').style.display = 'flex';
+
+  // 初始化预览（延迟一帧让DOM渲染完）
+  requestAnimationFrame(() => {
+    const previewEl = document.getElementById('cePreviewChart');
+    if (cePreviewInstance) { cePreviewInstance.dispose(); }
+    cePreviewInstance = echarts.init(previewEl);
+    cePreview();
+  });
+}
+
+function closeChartEditor() {
+  document.getElementById('chartEditModal').style.display = 'none';
+  if (cePreviewInstance) { cePreviewInstance.dispose(); cePreviewInstance = null; }
+  editingChartId = null;
+}
+
+// --- 配色管理 ---
+function ceBuildColorPickers() {
+  const container = document.getElementById('ceColorList');
+  // 保证至少有 8 个颜色槽
+  while (ceColors.length < 8) ceColors.push(CIBE_COLORS[ceColors.length % CIBE_COLORS.length]);
+  container.innerHTML = ceColors.slice(0, 8).map((c, i) =>
+    `<div class="ce-color-item">
+       <input type="color" value="${c}" onchange="ceColors[${i}]=this.value;cePreview()" title="系列${i+1}">
+       <span>${i+1}</span>
+     </div>`
+  ).join('');
+}
+
+// --- 数据表格构建 ---
+function ceBuildDataTable(data) {
+  const thead = document.getElementById('ceDataThead');
+  const tbody = document.getElementById('ceDataTbody');
+  const labels = data.labels || [];
+  const datasets = data.datasets || [];
+
+  // 表头：标签 | 系列1 | 系列2 | ...
+  thead.innerHTML = '<tr><th style="min-width:90px">标签</th>' +
+    datasets.map((ds, i) =>
+      `<th style="min-width:80px">
+        <div class="ce-series-name">
+          <input type="text" value="${ds.name || '系列'+(i+1)}" data-series="${i}" class="ce-sname" oninput="cePreview()">
+        </div>
+      </th>`
+    ).join('') + '</tr>';
+
+  // 数据行
+  tbody.innerHTML = labels.map((label, r) =>
+    '<tr><td><input class="ce-label-input" value="' + label + '" data-row="' + r + '" oninput="cePreview()"></td>' +
+    datasets.map((ds, c) =>
+      '<td><input type="number" value="' + (ds.values[r] ?? 0) + '" data-row="' + r + '" data-col="' + c + '" oninput="cePreview()"></td>'
+    ).join('') + '</tr>'
+  ).join('');
+}
+
+// --- 从表格读取数据 ---
+function ceReadTableData() {
+  const labels = [];
+  const seriesNames = [];
+  const seriesValues = [];
+
+  // 读取系列名
+  document.querySelectorAll('#ceDataThead .ce-sname').forEach(inp => {
+    seriesNames.push(inp.value.trim() || '系列');
+  });
+
+  // 初始化 values 数组
+  seriesNames.forEach(() => seriesValues.push([]));
+
+  // 读取每行
+  document.querySelectorAll('#ceDataTbody tr').forEach(tr => {
+    const cells = tr.querySelectorAll('input');
+    labels.push(cells[0].value.trim() || '');
+    for (let c = 1; c < cells.length; c++) {
+      seriesValues[c - 1].push(parseFloat(cells[c].value) || 0);
+    }
+  });
+
+  return {
+    labels,
+    datasets: seriesNames.map((name, i) => ({ name, values: seriesValues[i] }))
+  };
+}
+
+// --- 添加/删除行列 ---
+function ceAddRow() {
+  const data = ceReadTableData();
+  data.labels.push('新标签');
+  data.datasets.forEach(ds => ds.values.push(0));
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceRemoveRow() {
+  const data = ceReadTableData();
+  if (data.labels.length <= 1) return;
+  data.labels.pop();
+  data.datasets.forEach(ds => ds.values.pop());
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceAddSeries() {
+  const data = ceReadTableData();
+  if (data.datasets.length >= 5) return; // 最多5个系列
+  data.datasets.push({ name: '系列' + (data.datasets.length + 1), values: data.labels.map(() => 0) });
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+function ceRemoveSeries() {
+  const data = ceReadTableData();
+  if (data.datasets.length <= 1) return;
+  data.datasets.pop();
+  ceBuildDataTable(data);
+  cePreview();
+}
+
+// --- 实时预览 ---
+function cePreview() {
+  if (!cePreviewInstance) return;
+  // 更新 slider 标签
+  document.getElementById('ceBorderRadiusVal').textContent = document.getElementById('ceBorderRadius').value + 'px';
+  document.getElementById('ceBarWidthVal').textContent = document.getElementById('ceBarWidth').value + 'px';
+  document.getElementById('ceLineWidthVal').textContent = document.getElementById('ceLineWidth').value + 'px';
+
+  const type = document.getElementById('ceType').value;
+  const title = document.getElementById('ceTitle').value.trim();
+  const data = ceReadTableData();
+  const borderRadius = parseInt(document.getElementById('ceBorderRadius').value) || 0;
+  const barWidth = parseInt(document.getElementById('ceBarWidth').value) || 50;
+  const lineWidth = parseInt(document.getElementById('ceLineWidth').value) || 2;
+  const fontSize = parseInt(document.getElementById('ceFontSize').value) || 14;
+
+  // 构建自定义 option
+  const option = buildChartOptionAdvanced(type, title, data, {
+    colors: ceColors.slice(0, 8),
+    borderRadius,
+    barWidth,
+    lineWidth,
+    fontSize,
+  });
+
+  cePreviewInstance.setOption(option, true);
+  cePreviewInstance.resize();
+}
+
+// --- 高级 buildChartOption（带样式参数）---
+function buildChartOptionAdvanced(type, title, data, style) {
+  const colors = style.colors || CIBE_COLORS;
+  const borderRadius = style.borderRadius ?? 4;
+  const barWidth = style.barWidth ?? 50;
+  const lineWidth = style.lineWidth ?? 2;
+  const fontSize = style.fontSize ?? 14;
+
+  const base = {
+    title: {
+      text: title,
+      left: 'center',
+      top: 12,
+      textStyle: {
+        fontSize: fontSize,
+        fontWeight: 700,
+        color: '#1A1A2E',
+        width: 600,
+        overflow: 'break',
+      },
+    },
+    tooltip: {
+      trigger: type === 'pie' ? 'item' : 'axis',
+      confine: true,
+    },
+    color: colors,
+    animation: true,
+  };
+
+  if (type === 'pie') {
+    return {
+      ...base,
+      legend: { bottom: 10, left: 'center', textStyle: { fontSize: 11 }, type: 'scroll' },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '58%'],
+        center: ['50%', '48%'],
+        data: data.labels.map((label, i) => ({ name: label, value: data.datasets[0]?.values[i] ?? 0 })),
+        label: { formatter: '{b}\n{d}%', fontSize: 11, lineHeight: 16, position: 'outside' },
+        labelLine: { length: 12, length2: 8 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
+        itemStyle: { borderRadius: borderRadius },
+      }],
+    };
+  }
+
+  if (type === 'scatter') {
+    return {
+      ...base,
+      grid: { left: 50, right: 30, top: 50, bottom: 40, containLabel: true },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'value' },
+      series: data.datasets.map((ds, i) => ({
+        name: ds.name, type: 'scatter',
+        data: ds.values.map((v, j) => [data.labels[j] || j, v]),
+        symbolSize: 14,
+      })),
+    };
+  }
+
+  // bar / line / area
+  const chartType = type === 'area' ? 'line' : type;
+  return {
+    ...base,
+    grid: { left: 20, right: 30, top: 55, bottom: 45, containLabel: true },
+    xAxis: {
+      type: 'category', data: data.labels,
+      axisLabel: { fontSize: 11, interval: 0, rotate: data.labels.length > 6 ? 30 : 0 },
+      axisTick: { alignWithLabel: true },
+    },
+    yAxis: {
+      type: 'value', axisLabel: { fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } },
+    },
+    legend: { bottom: 5, textStyle: { fontSize: 11 }, type: 'scroll' },
+    series: data.datasets.map((ds, i) => ({
+      name: ds.name,
+      type: chartType,
+      data: ds.values,
+      smooth: true,
+      lineStyle: { width: lineWidth },
+      areaStyle: type === 'area' ? { opacity: 0.15 } : undefined,
+      barMaxWidth: barWidth,
+      barMinWidth: Math.min(15, barWidth),
+      itemStyle: { borderRadius: type === 'bar' ? [borderRadius, borderRadius, 0, 0] : 0 },
+      label: {
+        show: data.datasets.length === 1 && data.labels.length <= 8,
+        position: 'top', fontSize: 11, color: '#666',
+      },
+    })),
+  };
+}
+
+// --- 应用修改到正文图表 ---
+function applyChartEdit() {
+  const chartId = editingChartId;
+  if (!chartId) return;
+
+  const newTitle = document.getElementById('ceTitle').value.trim();
+  const newType = document.getElementById('ceType').value;
+  const newData = ceReadTableData();
+
+  // 验证
+  if (!newData.labels.length || !newData.datasets.length) {
+    document.getElementById('ceError').textContent = '数据不能为空';
+    return;
+  }
+
+  const newStyle = {
+    width: parseInt(document.getElementById('ceWidth').value) || 100,
+    height: parseInt(document.getElementById('ceHeight').value) || 380,
+    borderRadius: parseInt(document.getElementById('ceBorderRadius').value) || 0,
+    barWidth: parseInt(document.getElementById('ceBarWidth').value) || 50,
+    lineWidth: parseInt(document.getElementById('ceLineWidth').value) || 2,
+    fontSize: parseInt(document.getElementById('ceFontSize').value) || 14,
+    colors: [...ceColors.slice(0, 8)],
+  };
+
+  // 更新全局存储（包含样式）
+  chartDataStore[chartId] = { type: newType, title: newTitle, data: newData, style: newStyle };
+
+  // 找到对应 ECharts 实例并重新渲染
+  const el = document.getElementById(chartId);
+  if (el) {
+    // 调整图表容器高度
+    el.style.height = newStyle.height + 'px';
+    const instance = chartInstances.find(c => c.getDom() === el);
+    if (instance) {
+      instance.resize();
+      instance.setOption(buildChartOptionAdvanced(newType, newTitle, newData, newStyle), true);
+    }
+  }
+
+  closeChartEditor();
+}
+
+// =============================================================
+// 初始化
+// =============================================================
+
+// 健康检查
+document.getElementById('loginForm').addEventListener('submit', login);
+checkAuth();
+
+fetch(`${API_BASE}/api/health`)
+  .then(r => r.json())
+  .then(d => {
+    const parts = [];
+    parts.push(d.deepseek ? 'DeepSeek ✓' : 'DeepSeek ✗');
+    parts.push(d.image_gen ? '星绘 ✓' : '星绘 ✗');
+    document.getElementById('navStatus').textContent = parts.join(' | ');
+  })
+  .catch(() => {
+    document.getElementById('navStatus').textContent = '后端未连接';
+  });
+</script>
+
+</body>
+</html>

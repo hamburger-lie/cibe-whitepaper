@@ -1,0 +1,61 @@
+# ===== 环境与密钥 =====
+.env
+.env.local
+.env.*.local
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== 虚拟环境 =====
+venv/
+env/
+.venv/
+ENV/
+
+# ===== 运行时数据 =====
+reflections.json
+test_reflections.json
+data/*.json
+data/*.db
+data/*.db-*
+*.log
+server.out
+server.err
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ===== Office 临时锁文件 =====
+~$*
+.~lock.*
+
+# ===== 构建产物 =====
+dist/
+build/
+*.egg
+
+# ===== 测试输出 =====
+test_output.md
+test_summary.txt
+test_*.txt
+test_*.md
+
+# ===== Claude Code 数据 =====
+.claude/
+
+# ===== .env 备份副本 =====
+.env.backup*
+.env.*-backup
